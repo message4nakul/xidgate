@@ -313,7 +313,11 @@ export default function App(){
     <main style={S.main}>
       {view==="dashboard"&&<Dash xids={xids} onCreate={()=>canCreate?setView("create"):setShowPricing(true)} onOpen={openX} onCp={cp} onKill={id=>setShowKill(id)} onShare={x=>setShowShare(x)} tm={totM} onAccept={()=>setShowAccept(true)} canCreate={canCreate}/>}
       {view==="create"&&<CreateXID onSubmit={createXid} onCancel={()=>setView("dashboard")}/>}
-      {view==="chat"&&actXid&&<ChatV xid={xids.find(x=>x.id===actXid.id)||actXid} userId={user.id} convo={actConvo} onSelConvo={setActConvo} onBack={()=>{setView("dashboard");setActXid(null);setActConvo(null);}} onSend={sendMsg} onKill={()=>setShowKill(actXid.id)} onCp={cp} onShare={()=>setShowShare(xids.find(x=>x.id===actXid.id))}/>}
+      {view==="chat"&&actXid&&(()=>{
+        const freshXid=xids.find(x=>x.id===actXid.id)||actXid;
+        const freshConvo=actConvo?freshXid.conversations?.find(c=>c.id===actConvo.id)||freshXid.conversations?.[0]||null:freshXid.conversations?.[0]||null;
+        return <ChatV xid={freshXid} userId={user.id} convo={freshConvo} onSelConvo={setActConvo} onBack={()=>{setView("dashboard");setActXid(null);setActConvo(null);}} onSend={sendMsg} onKill={()=>setShowKill(actXid.id)} onCp={cp} onShare={()=>setShowShare(freshXid)}/>;
+      })()}
     </main>
 
     {showKill&&<div style={S.ov} onClick={()=>setShowKill(null)}><div style={S.modal} onClick={e=>e.stopPropagation()}><div style={{width:44,height:44,borderRadius:12,background:"rgba(232,93,93,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:"#e85d5d",margin:"0 auto 12px"}}><I.Power/></div><h3 style={{fontSize:16,fontWeight:700,color:"#fff",marginBottom:6}}>Kill this XID?</h3><p style={{fontSize:12,color:"#5a6577",lineHeight:1.6,marginBottom:20}}>All conversations permanently destroyed.</p><div style={{display:"flex",gap:8}}><button style={S.secBtn} onClick={()=>setShowKill(null)}>Cancel</button><button style={{...S.primaryBtn,flex:1,background:"#e85d5d"}} onClick={()=>killXid(showKill)}>Kill XID</button></div></div></div>}
