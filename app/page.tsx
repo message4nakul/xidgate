@@ -212,10 +212,13 @@ export default function App(){
   };
 
   const sendMsg = async (convoId, text) => {
+    // Instantly add to local state so it appears without refresh
+    const tempMsg = {id:"temp-"+Date.now(),from:"me",sender:null,text,ts:new Date().toISOString()};
+    setXids(prev=>prev.map(x=>({...x,conversations:(x.conversations||[]).map(c=>c.id===convoId?{...c,messages:[...(c.messages||[]),tempMsg]}:c)})));
+    // Then save to database
     await supabase.from("messages").insert({
       conversation_id:convoId, sender_id:user.id, content:text
     });
-    await loadXids(user.id);
   };
 
   const acceptXid = async (code) => {
@@ -225,9 +228,9 @@ export default function App(){
     if(xid.user_id===user.id){alert("You can't accept your own XID.");setShowAccept(false);return;}
 
     // Check connection limit
-    if(xid.max_conn){
+    if(xid.max_conn !== null && xid.max_conn !== undefined){
       const{count}=await supabase.from("conversations").select("*",{count:"exact",head:true}).eq("xid_id",xid.id);
-      if(count>=xid.max_conn){alert("Connection limit reached for this XID.");setShowAccept(false);return;}
+      if(count>=xid.max_conn){alert("Connection limit reached for this XID ("+count+"/"+xid.max_conn+").");setShowAccept(false);return;}
     }
 
     // Check if already connected
@@ -263,9 +266,12 @@ export default function App(){
   const cp = v => {navigator.clipboard?.writeText(v);setToast("Copied!");};
   const openX = (x,c) => {setActXid(x);setActConvo(x.xidType==="group"?(x.conversations[0]||null):(c||x.conversations[0]||null));setView("chat");};
   const totM = x => (x.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
-  const activeL = xids.filter(x=>x.status==="active");
-  const closedL = xids.filter(x=>x.status!=="active");
-  const canCreate = activeL.filter(x=>x.isOwner).length<3;
+  const xidMatchSearch = (x,q) => {if(!q)return true;const l=q.toLowerCase();return x.label.toLowerCase().includes(l)||(x.xid||x.xid_code||"").toLowerCase().includes(l)||(x.conversations||[]).some(c=>(c.display_name&&c.display_name.toLowerCase().includes(l))||(c.messages||[]).some(m=>m.text.toLowerCase().includes(l)));};
+  const allActive = xids.filter(x=>x.status==="active");
+  const allClosed = xids.filter(x=>x.status!=="active");
+  const activeL = sideQ.trim() ? allActive.filter(x=>xidMatchSearch(x,sideQ)) : allActive;
+  const closedL = sideQ.trim() ? allClosed.filter(x=>xidMatchSearch(x,sideQ)) : allClosed;
+  const canCreate = allActive.filter(x=>x.isOwner).length<3;
 
   if(loading) return <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#090c11",color:"#63b3ed",fontSize:14}}>Loading...</div>;
   if(!user) return <AuthScreen onLogin={handleLogin}/>;
@@ -412,8 +418,13 @@ function Card({x,i,onOpen,onCp,onKill,onShare,tm}){
 
 /* ═══ CREATE ═══ */
 function CreateXID({onSubmit,onCancel}){
-  const[label,setLabel]=useState("");const[xidType,setXT]=useState("individual");const[dur,setDur]=useState("24h");const[ah,setAH]=useState("any");const[mc,setMC]=useState("");const[mm,setMM]=useState("");const[loading,setLoading]=useState(false);
-  const go=async()=>{if(!label.trim()||loading)return;setLoading(true);await onSubmit({label:label.trim(),xidType,duration:dur,activeHours:ah,maxConn:mc,maxMsgs:mm});setLoading(false);};
+  const[label,setLabel]=useState("");const[xidType,setXT]=useState("individual");const[dur,setDur]=useState("24h");const[ah,setAH]=useState("any");
+  const[mcMode,setMCMode]=useState("unlimited"); // "unlimited" or "limit"
+  const[mcVal,setMCVal]=useState("");
+  const[mmMode,setMMMode]=useState("unlimited");
+  const[mmVal,setMMVal]=useState("");
+  const[loading,setLoading]=useState(false);
+  const go=async()=>{if(!label.trim()||loading)return;setLoading(true);await onSubmit({label:label.trim(),xidType,duration:dur,activeHours:ah,maxConn:mcMode==="unlimited"?"":mcVal,maxMsgs:mmMode==="unlimited"?"":mmVal});setLoading(false);};
   return(<div style={{flex:1,overflowY:"auto",padding:"24px 32px"}}>
     <button style={S.backBtn} onClick={onCancel}><I.Back/> Dashboard</button>
     <div style={{maxWidth:540}}>
@@ -426,8 +437,24 @@ function CreateXID({onSubmit,onCancel}){
       </div></div>
       <div style={{display:"flex",gap:12,...S.formSection}}><div style={{flex:1}}><label style={S.fLabel}>Expires After</label><Sel options={durOpts} value={dur} onChange={setDur}/></div><div style={{flex:1}}><label style={S.fLabel}>Active Hours</label><Sel options={ahOpts} value={ah} onChange={setAH}/></div></div>
       <div style={{display:"flex",gap:12,...S.formSection}}>
-        <div style={{flex:1}}><label style={S.fLabel}>Connection Limit</label><div style={{display:"flex",gap:5,marginBottom:4}}><button style={{...S.toggleBtn,background:mc===""?"rgba(99,179,237,0.1)":"transparent",color:mc===""?"#63b3ed":"#4a5568",borderColor:mc===""?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>setMC("")}>Unlimited</button><button style={{...S.toggleBtn,background:mc!==""?"rgba(99,179,237,0.1)":"transparent",color:mc!==""?"#63b3ed":"#4a5568",borderColor:mc!==""?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>{if(mc==="")setMC("1");}}>Limit</button></div>{mc!==""&&<input style={S.inp} placeholder="Number" value={mc} onChange={e=>setMC(e.target.value.replace(/[^0-9]/g,""))}/>}</div>
-        <div style={{flex:1}}><label style={S.fLabel}>Max Messages</label><div style={{display:"flex",gap:5,marginBottom:4}}><button style={{...S.toggleBtn,background:mm===""?"rgba(99,179,237,0.1)":"transparent",color:mm===""?"#63b3ed":"#4a5568",borderColor:mm===""?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>setMM("")}>Unlimited</button><button style={{...S.toggleBtn,background:mm!==""?"rgba(99,179,237,0.1)":"transparent",color:mm!==""?"#63b3ed":"#4a5568",borderColor:mm!==""?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>{if(mm==="")setMM("50");}}>Limit</button></div>{mm!==""&&<input style={S.inp} placeholder="Number" value={mm} onChange={e=>setMM(e.target.value.replace(/[^0-9]/g,""))}/>}</div>
+        <div style={{flex:1}}>
+          <label style={S.fLabel}>Connection Limit</label>
+          <div style={{display:"flex",gap:5,marginBottom:4}}>
+            <button style={{...S.toggleBtn,background:mcMode==="unlimited"?"rgba(99,179,237,0.1)":"transparent",color:mcMode==="unlimited"?"#63b3ed":"#4a5568",borderColor:mcMode==="unlimited"?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>{setMCMode("unlimited");setMCVal("");}}>Unlimited</button>
+            <button style={{...S.toggleBtn,background:mcMode==="limit"?"rgba(99,179,237,0.1)":"transparent",color:mcMode==="limit"?"#63b3ed":"#4a5568",borderColor:mcMode==="limit"?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>setMCMode("limit")}>Limit</button>
+          </div>
+          {mcMode==="limit"&&<input style={S.inp} placeholder="Enter number (e.g. 5)" value={mcVal} onChange={e=>setMCVal(e.target.value.replace(/[^0-9]/g,""))}/>}
+          {mcMode==="limit"&&<p style={{fontSize:10,color:"#4a5568",marginTop:4}}>{mcVal?`Max ${mcVal} connections`:"Enter a number"}</p>}
+        </div>
+        <div style={{flex:1}}>
+          <label style={S.fLabel}>Max Messages</label>
+          <div style={{display:"flex",gap:5,marginBottom:4}}>
+            <button style={{...S.toggleBtn,background:mmMode==="unlimited"?"rgba(99,179,237,0.1)":"transparent",color:mmMode==="unlimited"?"#63b3ed":"#4a5568",borderColor:mmMode==="unlimited"?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>{setMMMode("unlimited");setMMVal("");}}>Unlimited</button>
+            <button style={{...S.toggleBtn,background:mmMode==="limit"?"rgba(99,179,237,0.1)":"transparent",color:mmMode==="limit"?"#63b3ed":"#4a5568",borderColor:mmMode==="limit"?"rgba(99,179,237,0.25)":"rgba(255,255,255,0.06)"}} onClick={()=>setMMMode("limit")}>Limit</button>
+          </div>
+          {mmMode==="limit"&&<input style={S.inp} placeholder="Enter number (e.g. 50)" value={mmVal} onChange={e=>setMMVal(e.target.value.replace(/[^0-9]/g,""))}/>}
+          {mmMode==="limit"&&<p style={{fontSize:10,color:"#4a5568",marginTop:4}}>{mmVal?`Max ${mmVal} messages`:"Enter a number"}</p>}
+        </div>
       </div>
       <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button style={S.secBtn} onClick={onCancel}>Cancel</button><button style={{...S.primaryBtn,opacity:label.trim()&&!loading?1:0.35}} onClick={go}>{loading?"Creating...":<><I.Plus/> Create XID</>}</button></div>
     </div>
