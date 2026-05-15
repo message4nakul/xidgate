@@ -243,21 +243,20 @@ export default function App(){
     await sb.from("messages").insert({conversation_id:cid,sender_id:user.id,content:text});
   };
   const acceptXid=async code=>{
-    const{data:xid}=await sb.from("xids").select("*").eq("xid_code",code).eq("status","active").single();
+    const{data:xid}=await sb.from("xids").select("*").eq("xid_code",code).eq("status","active").maybeSingle();
     if(!xid){alert("XID not found or inactive.");setShowAccept(false);return;}
     if(xid.user_id===user.id){alert("Cannot accept your own XID.");setShowAccept(false);return;}
-    // Check expiry
     if(xid.expires_at&&new Date(xid.expires_at)<=new Date()){alert("This XID has expired.");setShowAccept(false);return;}
-    // Check connection limit
+    const{data:myEx}=await sb.from("conversations").select("id").eq("xid_id",xid.id).eq("participant_id",user.id);
+    if(myEx&&myEx.length>0){await loadXids(user.id);setShowAccept(false);setToast("Already connected!");return;}
     if(xid.max_conn!==null&&xid.max_conn!==undefined&&xid.max_conn>=0){
-      const{data:existingConvos}=await sb.from("conversations").select("id").eq("xid_id",xid.id);
-      const currentCount=(existingConvos||[]).length;
-      if(currentCount>=xid.max_conn){alert(`Connection limit reached (${currentCount}/${xid.max_conn}). This XID cannot accept more connections.`);setShowAccept(false);return;}
+      const{data:allConvos}=await sb.from("conversations").select("id").eq("xid_id",xid.id);
+      const cnt=(allConvos||[]).length;
+      if(cnt>=xid.max_conn){alert(`Connection limit reached (${cnt}/${xid.max_conn}).`);setShowAccept(false);return;}
     }
-    const{data:ex}=await sb.from("conversations").select("*").eq("xid_id",xid.id).eq("participant_id",user.id);
-    if(ex&&ex.length>0){await loadXids(user.id);setShowAccept(false);setToast("Already connected!");return;}
     const dn=profile?.name||user.email.split("@")[0];
-    await sb.from("conversations").insert({xid_id:xid.id,participant_id:user.id,display_name:dn});
+    const{error}=await sb.from("conversations").insert({xid_id:xid.id,participant_id:user.id,display_name:dn});
+    if(error){alert("Error: "+error.message);setShowAccept(false);return;}
     await loadXids(user.id);setShowAccept(false);setToast("Connected to "+xid.label+"!");
   };
   const cp=v=>{navigator.clipboard?.writeText(v);setToast("Copied!");};
