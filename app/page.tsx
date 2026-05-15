@@ -265,6 +265,10 @@ export default function App(){
     setXids(full);
   };
 
+  // Total unread count
+  const totalUnread=xids.reduce((s,x)=>s+getUnread(x),0);
+  useEffect(()=>{document.title=totalUnread>0?`(${totalUnread}) XIDgate`:"XIDgate";},[totalUnread]);
+
   if(loading)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#090c11"}}><Logo size={32}/></div>;
   if(!user)return<AuthScreen onLogin={u=>{setUser(u);loadProfile(u.id);loadXids(u.id);}}/>;
 
@@ -272,10 +276,6 @@ export default function App(){
   const activeL=sideQ?allActive.filter(x=>xidMatch(x,sideQ)):allActive;
   const closedL=sideQ?allClosed.filter(x=>xidMatch(x,sideQ)):allClosed;
   const totM=x=>(x.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
-  const totalUnread=xids.reduce((s,x)=>s+getUnread(x),0);
-
-  // Update browser tab title with unread count
-  useEffect(()=>{document.title=totalUnread>0?`(${totalUnread}) XIDgate`:"XIDgate";},[totalUnread]);
 
   const createXid=async d=>{
     const mc=d.maxConn===""?null:(d.maxConn===0?0:parseInt(d.maxConn));const mm=d.maxMsgs===""?null:(d.maxMsgs===0?0:parseInt(d.maxMsgs));
