@@ -11,10 +11,23 @@ const timeAgo=d=>{if(!d)return"";const s=Math.floor((Date.now()-new Date(d).getT
 const timeFull=d=>{if(!d)return"";const s=Math.floor((Date.now()-new Date(d).getTime())/1000);if(s<60)return"just now";if(s<3600)return`${Math.floor(s/60)} min ago`;if(s<86400)return`${Math.floor(s/3600)} hours ago`;return`${Math.floor(s/86400)} days ago`;};
 const fmtLeft=e=>{if(!e)return"No expiry";const d=new Date(e).getTime()-Date.now();if(d<=0)return"Expired";const h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000);if(h>24)return`${Math.floor(h/24)}d ${h%24}h`;if(h>0)return`${h}h ${m}m`;return`${m}m`;};
 const getExp=dur=>{if(dur==="never")return null;const m={"1h":36e5,"6h":216e5,"24h":864e5,"7d":6048e5,"30d":25920e5};return new Date(Date.now()+(m[dur]||864e5)).toISOString();};
-const fmtDate=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}):"";
-const fmtDateTime=d=>d?new Date(d).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
-const xidMatch=(x,q)=>{if(!q)return true;const l=q.toLowerCase();return(x.label||"").toLowerCase().includes(l)||(x.xid||x.xid_code||"").toLowerCase().includes(l)||(x.conversations||[]).some(c=>(c.display_name&&c.display_name.toLowerCase().includes(l))||(c.messages||[]).some(m=>(m.text||"").toLowerCase().includes(l)));};
+const fmtDate=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric",timeZone:getUserTZ()}):"";
+const fmtDateTime=d=>d?new Date(d).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",timeZone:getUserTZ()}):"";
+const fmtTime=d=>d?new Date(d).toLocaleString("en-IN",{hour:"2-digit",minute:"2-digit",timeZone:getUserTZ()}):"";const xidMatch=(x,q)=>{if(!q)return true;const l=q.toLowerCase();return(x.label||"").toLowerCase().includes(l)||(x.xid||x.xid_code||"").toLowerCase().includes(l)||(x.conversations||[]).some(c=>(c.display_name&&c.display_name.toLowerCase().includes(l))||(c.messages||[]).some(m=>(m.text||"").toLowerCase().includes(l)));};
 const cvMatch=(c,q)=>{if(!q)return true;const l=q.toLowerCase();return(c.display_name&&c.display_name.toLowerCase().includes(l))||(c.messages||[]).some(m=>(m.text||"").toLowerCase().includes(l));};
+
+/* ═══ TIMEZONE HELPERS ═══ */
+const getUserTZ=()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(e){return"Asia/Kolkata";}};
+const getHourInTZ=(tz)=>{try{const s=new Date().toLocaleString("en-US",{timeZone:tz,hour:"numeric",hour12:false});return parseInt(s);}catch(e){return new Date().getHours();}};
+const checkActiveHours=(ah,tz)=>{
+  if(!ah||ah==="any")return true;
+  const hour=getHourInTZ(tz||getUserTZ());
+  const ranges={"6am-12pm":[6,12],"12pm-6pm":[12,18],"6pm-11pm":[18,23],"9am-6pm":[9,18],"6pm-10pm":[18,22],"8am-8pm":[8,20],"8pm-2am":[20,26]};
+  const range=ranges[ah];
+  if(!range)return true;
+  let h=hour;if(range[1]>24&&h<range[1]-24)h+=24;
+  return h>=range[0]&&h<range[1];
+};
 
 const ahOpts=[{label:"Any time",value:"any"},{label:"Morning 6AM-12PM",value:"6am-12pm"},{label:"Afternoon 12-6PM",value:"12pm-6pm"},{label:"Evening 6-11PM",value:"6pm-11pm"},{label:"Business 9AM-6PM",value:"9am-6pm"},{label:"After work 6-10PM",value:"6pm-10pm"},{label:"Daytime 8AM-8PM",value:"8am-8pm"},{label:"Night 8PM-2AM",value:"8pm-2am"}];
 const getAH=v=>ahOpts.find(o=>o.value===v)?.label||v;
@@ -198,13 +211,33 @@ export default function App(){
   const totM=x=>(x.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
 
   const createXid=async d=>{
-    const mc=d.maxConn===""?null:(parseInt(d.maxConn)||null);const mm=d.maxMsgs===""?null:(parseInt(d.maxMsgs)||null);
-    const{data,error}=await sb.from("xids").insert({user_id:user.id,xid_code:genXID(),label:d.label,xid_type:d.xidType,duration:d.duration,active_hours:d.activeHours,max_conn:mc,max_msgs:mm,status:"active",expires_at:getExp(d.duration)}).select().single();
+    const mc=d.maxConn===""?null:(d.maxConn===0?0:parseInt(d.maxConn));const mm=d.maxMsgs===""?null:(d.maxMsgs===0?0:parseInt(d.maxMsgs));
+    if(mc!==null&&isNaN(mc)){setToast("Invalid connection limit");return;}
+    if(mm!==null&&isNaN(mm)){setToast("Invalid message limit");return;}
+    const{data,error}=await sb.from("xids").insert({user_id:user.id,xid_code:genXID(),label:d.label,xid_type:d.xidType,duration:d.duration,active_hours:d.activeHours,max_conn:mc,max_msgs:mm,status:"active",expires_at:getExp(d.duration),creator_tz:getUserTZ()}).select().single();
     if(error){setToast("Error: "+error.message);return;}
     await loadXids(user.id);setView("dashboard");setToast("XID created!");setShowShare({...data,xid:data.xid_code});
   };
   const killXid=async id=>{await sb.from("xids").update({status:"revoked"}).eq("id",id);setShowKill(null);setToast("XID killed.");if(actXid?.id===id){setView("dashboard");setActConvo(null);setActXid(null);}await loadXids(user.id);};
   const sendMsg=async(cid,text)=>{
+    // Check active hours before sending
+    const xidForConvo=xids.find(x=>(x.conversations||[]).some(c=>c.id===cid));
+    if(xidForConvo){
+      const ah=xidForConvo.activeHours||xidForConvo.active_hours||"any";
+      const tz=xidForConvo.creator_tz||getUserTZ();
+      if(!checkActiveHours(ah,tz)){
+        const currentHour=getHourInTZ(tz);
+        setToast(`Outside active hours (${getAH(ah)}). Current time in creator's timezone: ${currentHour}:00`);return;
+      }
+      // Check message limit
+      if(xidForConvo.maxMsgs!=null||xidForConvo.max_msgs!=null){
+        const limit=xidForConvo.maxMsgs??xidForConvo.max_msgs;
+        const total=(xidForConvo.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
+        if(total>=limit){setToast(`Message limit reached (${total}/${limit})`);return;}
+      }
+      // Check expiry
+      if(xidForConvo.expires_at&&new Date(xidForConvo.expires_at)<=new Date()){setToast("This XID has expired.");return;}
+    }
     const tmp={id:"t"+Date.now(),from:"me",sender:null,text,ts:new Date().toISOString()};
     setXids(p=>p.map(x=>({...x,conversations:(x.conversations||[]).map(c=>c.id===cid?{...c,messages:[...(c.messages||[]),tmp]}:c)})));
     await sb.from("messages").insert({conversation_id:cid,sender_id:user.id,content:text});
@@ -213,7 +246,14 @@ export default function App(){
     const{data:xid}=await sb.from("xids").select("*").eq("xid_code",code).eq("status","active").single();
     if(!xid){alert("XID not found or inactive.");setShowAccept(false);return;}
     if(xid.user_id===user.id){alert("Cannot accept your own XID.");setShowAccept(false);return;}
-    if(xid.max_conn!==null&&xid.max_conn!==undefined){const{count}=await sb.from("conversations").select("*",{count:"exact",head:true}).eq("xid_id",xid.id);if(count>=xid.max_conn){alert(`Connection limit reached (${count}/${xid.max_conn}).`);setShowAccept(false);return;}}
+    // Check expiry
+    if(xid.expires_at&&new Date(xid.expires_at)<=new Date()){alert("This XID has expired.");setShowAccept(false);return;}
+    // Check connection limit
+    if(xid.max_conn!==null&&xid.max_conn!==undefined&&xid.max_conn>=0){
+      const{data:existingConvos}=await sb.from("conversations").select("id").eq("xid_id",xid.id);
+      const currentCount=(existingConvos||[]).length;
+      if(currentCount>=xid.max_conn){alert(`Connection limit reached (${currentCount}/${xid.max_conn}). This XID cannot accept more connections.`);setShowAccept(false);return;}
+    }
     const{data:ex}=await sb.from("conversations").select("*").eq("xid_id",xid.id).eq("participant_id",user.id);
     if(ex&&ex.length>0){await loadXids(user.id);setShowAccept(false);setToast("Already connected!");return;}
     const dn=profile?.name||user.email.split("@")[0];
@@ -305,7 +345,7 @@ function Card({x,i,onOpen,onCp,onKill,onShare,tm}){
       {act&&x.isOwner&&<button style={{padding:5,borderRadius:5,background:"rgba(229,168,53,0.05)",color:"#E5A835"}} onClick={e=>{e.stopPropagation();onShare();}}><I.Share/></button>}
     </div>
     <button style={S.xidBtn} onClick={e=>{e.stopPropagation();onCp();}}><code>{x.xid||x.xid_code}</code><I.Copy/></button>
-    <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}><span style={S.tag}><I.Clock/>{fmtLeft(x.expires_at)}</span><span style={S.tag}><I.Chat/>{tm} msgs</span><span style={S.tag}>{(x.conversations||[]).length} connected</span></div>
+    <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}><span style={S.tag}><I.Clock/>{fmtLeft(x.expires_at)}</span><span style={S.tag}><I.Chat/>{tm}{x.maxMsgs!=null?`/${x.maxMsgs}`:""} msgs</span><span style={S.tag}><I.Users/>{(x.conversations||[]).length}{x.maxConn!=null?`/${x.maxConn}`:""} connected</span>{(x.activeHours||x.active_hours)&&(x.activeHours||x.active_hours)!=="any"&&<span style={S.tag}>{getAH(x.activeHours||x.active_hours)}</span>}</div>
     <div style={{display:"flex",gap:5,marginTop:3}}>
       <button style={S.cardBtn} onClick={()=>onOpen(null)} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.025)"}><I.Chat/>{act?"Open":"View"}</button>
       {act&&x.isOwner&&<button style={S.killBtn} onClick={e=>{e.stopPropagation();onKill();}} onMouseEnter={e=>e.currentTarget.style.background="rgba(232,93,93,0.1)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(232,93,93,0.04)"}><I.Trash/></button>}
