@@ -193,11 +193,61 @@ export default function App(){
     const all=[...(owned||[]),...cXids];
     const full=await Promise.all(all.map(async x=>{
       const{data:cvs}=await sb.from("conversations").select("*").eq("xid_id",x.id).order("created_at");
-      const fCvs=await Promise.all((cvs||[]).map(async c=>{
-        const{data:ms}=await sb.from("messages").select("*").eq("conversation_id",c.id).order("created_at");
-        return{...c,messages:(ms||[]).map(m=>({id:m.id,from:m.sender_id===uid?"me":"them",sender:m.sender_id===uid?null:c.display_name,text:m.content,ts:m.created_at}))};
-      }));
-      return{...x,xidType:x.xid_type,maxConn:x.max_conn,maxMsgs:x.max_msgs,activeHours:x.active_hours,xid:x.xid_code,conversations:fCvs,isOwner:x.user_id===uid};
+      const allCvs=cvs||[];
+
+      // Build sender name lookup: sender_id -> display_name
+      const senderMap={};
+      allCvs.forEach(c=>{if(c.participant_id)senderMap[c.participant_id]=c.display_name;});
+      // Add XID owner name
+      if(x.user_id===uid){senderMap[uid]="You";}
+      else{
+        // Fetch owner's name
+        const{data:ownerProfile}=await sb.from("profiles").select("name").eq("id",x.user_id).maybeSingle();
+        senderMap[x.user_id]=ownerProfile?.name||"Owner";
+      }
+
+      const isGroup=x.xid_type==="group";
+
+      if(isGroup){
+        // GROUP XID: merge ALL messages from ALL conversations into one thread
+        let allMsgs=[];
+        const convoIds=allCvs.map(c=>c.id);
+        if(convoIds.length>0){
+          const{data:msgs}=await sb.from("messages").select("*").in("conversation_id",convoIds).order("created_at");
+          allMsgs=(msgs||[]).map(m=>({
+            id:m.id,
+            from:m.sender_id===uid?"me":"them",
+            sender:m.sender_id===uid?null:(senderMap[m.sender_id]||"Unknown"),
+            senderId:m.sender_id,
+            text:m.content,
+            ts:m.created_at,
+            conversation_id:m.conversation_id
+          }));
+        }
+        // Create one virtual conversation containing all messages
+        const mergedConvo={
+          id:allCvs[0]?.id||"group",
+          xid_id:x.id,
+          display_name:"Group Chat",
+          messages:allMsgs,
+          participants:allCvs.map(c=>({id:c.participant_id,name:c.display_name}))
+        };
+        return{...x,xidType:x.xid_type,maxConn:x.max_conn,maxMsgs:x.max_msgs,activeHours:x.active_hours,xid:x.xid_code,conversations:[mergedConvo],allConversations:allCvs,isOwner:x.user_id===uid};
+      } else {
+        // INDIVIDUAL XID: keep separate conversations, but fix sender names
+        const fCvs=await Promise.all(allCvs.map(async c=>{
+          const{data:ms}=await sb.from("messages").select("*").eq("conversation_id",c.id).order("created_at");
+          return{...c,messages:(ms||[]).map(m=>({
+            id:m.id,
+            from:m.sender_id===uid?"me":"them",
+            sender:m.sender_id===uid?null:(senderMap[m.sender_id]||c.display_name),
+            senderId:m.sender_id,
+            text:m.content,
+            ts:m.created_at
+          }))};
+        }));
+        return{...x,xidType:x.xid_type,maxConn:x.max_conn,maxMsgs:x.max_msgs,activeHours:x.active_hours,xid:x.xid_code,conversations:fCvs,isOwner:x.user_id===uid};
+      }
     }));
     setXids(full);
   };
@@ -220,24 +270,39 @@ export default function App(){
   };
   const killXid=async id=>{await sb.from("xids").update({status:"revoked"}).eq("id",id);setShowKill(null);setToast("XID killed.");if(actXid?.id===id){setView("dashboard");setActConvo(null);setActXid(null);}await loadXids(user.id);};
   const sendMsg=async(cid,text)=>{
-    // Check active hours before sending
     const xidForConvo=xids.find(x=>(x.conversations||[]).some(c=>c.id===cid));
     if(xidForConvo){
       const ah=xidForConvo.activeHours||xidForConvo.active_hours||"any";
       const tz=xidForConvo.creator_tz||getUserTZ();
-      if(!checkActiveHours(ah,tz)){
-        const currentHour=getHourInTZ(tz);
-        setToast(`Outside active hours (${getAH(ah)}). Current time in creator's timezone: ${currentHour}:00`);return;
-      }
-      // Check message limit
+      if(!checkActiveHours(ah,tz)){setToast(`Outside active hours (${getAH(ah)})`);return;}
       if(xidForConvo.maxMsgs!=null||xidForConvo.max_msgs!=null){
         const limit=xidForConvo.maxMsgs??xidForConvo.max_msgs;
         const total=(xidForConvo.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
         if(total>=limit){setToast(`Message limit reached (${total}/${limit})`);return;}
       }
-      // Check expiry
       if(xidForConvo.expires_at&&new Date(xidForConvo.expires_at)<=new Date()){setToast("This XID has expired.");return;}
+
+      // For group XIDs: find the correct conversation_id for this sender
+      let actualCid=cid;
+      if(xidForConvo.xidType==="group"||xidForConvo.xid_type==="group"){
+        // If sender is the owner, use the first available conversation
+        if(xidForConvo.isOwner){
+          const allConvos=xidForConvo.allConversations||xidForConvo.conversations||[];
+          actualCid=allConvos[0]?.id||cid;
+        }else{
+          // If sender is a participant, find their own conversation
+          const allConvos=xidForConvo.allConversations||[];
+          const myConvo=allConvos.find(c=>c.participant_id===user.id);
+          actualCid=myConvo?.id||cid;
+        }
+      }
+
+      const tmp={id:"t"+Date.now(),from:"me",sender:null,text,ts:new Date().toISOString()};
+      setXids(p=>p.map(x=>({...x,conversations:(x.conversations||[]).map(c=>c.id===cid?{...c,messages:[...(c.messages||[]),tmp]}:c)})));
+      await sb.from("messages").insert({conversation_id:actualCid,sender_id:user.id,content:text});
+      return;
     }
+    // Fallback
     const tmp={id:"t"+Date.now(),from:"me",sender:null,text,ts:new Date().toISOString()};
     setXids(p=>p.map(x=>({...x,conversations:(x.conversations||[]).map(c=>c.id===cid?{...c,messages:[...(c.messages||[]),tmp]}:c)})));
     await sb.from("messages").insert({conversation_id:cid,sender_id:user.id,content:text});
@@ -344,7 +409,9 @@ function Card({x,i,onOpen,onCp,onKill,onShare,tm}){
       {act&&x.isOwner&&<button style={{padding:5,borderRadius:5,background:"rgba(229,168,53,0.05)",color:"#E5A835"}} onClick={e=>{e.stopPropagation();onShare();}}><I.Share/></button>}
     </div>
     <button style={S.xidBtn} onClick={e=>{e.stopPropagation();onCp();}}><code>{x.xid||x.xid_code}</code><I.Copy/></button>
-    <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}><span style={S.tag}><I.Clock/>{fmtLeft(x.expires_at)}</span><span style={S.tag}><I.Chat/>{tm}{x.maxMsgs!=null?`/${x.maxMsgs}`:""} msgs</span><span style={S.tag}><I.Users/>{(x.conversations||[]).length}{x.maxConn!=null?`/${x.maxConn}`:""} connected</span>{(x.activeHours||x.active_hours)&&(x.activeHours||x.active_hours)!=="any"&&<span style={S.tag}>{getAH(x.activeHours||x.active_hours)}</span>}</div>
+    <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}><span style={S.tag}><I.Clock/>{fmtLeft(x.expires_at)}</span><span style={S.tag}><I.Chat/>{tm}{x.maxMsgs!=null?`/${x.maxMsgs}`:""} msgs</span><span style={S.tag}><I.Users/>{(x.allConversations||x.conversations||[]).length}{x.maxConn!=null?`/${x.maxConn}`:""} connected</span>{(x.activeHours||x.active_hours)&&(x.activeHours||x.active_hours)!=="any"&&<span style={S.tag}>{getAH(x.activeHours||x.active_hours)}</span>}</div>
+    {/* Show participant names for group XIDs */}
+    {isG&&(x.allConversations||x.conversations[0]?.participants||[]).length>0&&<div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:6}}>{(x.conversations[0]?.participants||(x.allConversations||[]).map(c=>({name:c.display_name}))).map((p,i)=><span key={i} style={{fontSize:8,padding:"1px 5px",borderRadius:3,background:"rgba(27,79,114,0.06)",color:"#5a8baa"}}>{p.name}</span>)}</div>}
     <div style={{display:"flex",gap:5,marginTop:3}}>
       <button style={S.cardBtn} onClick={()=>onOpen(null)} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.05)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.025)"}><I.Chat/>{act?"Open":"View"}</button>
       {act&&x.isOwner&&<button style={S.killBtn} onClick={e=>{e.stopPropagation();onKill();}} onMouseEnter={e=>e.currentTarget.style.background="rgba(232,93,93,0.1)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(232,93,93,0.04)"}><I.Trash/></button>}
@@ -392,7 +459,9 @@ function ChatV({xid:x,userId,convo,onSelConvo,onBack,onSend,onKill,onCp,onShare}
       <button style={{color:"#5a6577",padding:3}} onClick={onBack}><I.Back/></button>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}><h3 style={{fontSize:13,fontWeight:700,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</h3><span style={{fontSize:7.5,fontWeight:700,padding:"2px 5px",borderRadius:3,background:isG?"rgba(27,79,114,0.1)":"rgba(229,168,53,0.08)",color:isG?"#1B4F72":"#E5A835"}}>{isG?"GRP":"1:1"}</span><span style={{width:5,height:5,borderRadius:"50%",background:act?"#48bb78":"#e85d5d"}}/></div>
-        <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9.5,color:"#3d4555",marginTop:1}}><span>{x.xid||x.xid_code}</span><span>·</span><span>{fmtLeft(x.expires_at)}</span><span>·</span><span>{(x.conversations||[]).length} connected</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9.5,color:"#3d4555",marginTop:1,flexWrap:"wrap"}}><span>{x.xid||x.xid_code}</span><span>·</span><span>{fmtLeft(x.expires_at)}</span><span>·</span><span>{(x.allConversations||x.conversations||[]).length} connected</span>
+          {isG&&cur?.participants&&cur.participants.length>0&&<><span>·</span><span>{cur.participants.map(p=>p.name).join(", ")}</span></>}
+        </div>
       </div>
       <div style={{display:"flex",gap:4}}>
         {act&&x.isOwner&&<button style={{padding:"4px 8px",borderRadius:5,fontSize:10,fontWeight:600,color:"#E5A835",background:"rgba(229,168,53,0.06)"}} onClick={onShare}><I.Share/></button>}
