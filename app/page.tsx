@@ -29,6 +29,19 @@ const checkActiveHours=(ah,tz)=>{
   return h>=range[0]&&h<range[1];
 };
 
+/* ═══ UNREAD TRACKING ═══ */
+const readTimes = {};
+const markRead = (xidId) => { readTimes[xidId] = new Date().toISOString(); };
+const getUnread = (x) => {
+  const lastRead = readTimes[x.id];
+  if (!lastRead) {
+    // Never opened — count all messages from others as unread
+    return (x.conversations || []).reduce((s, c) => s + (c.messages || []).filter(m => m.from !== "me").length, 0);
+  }
+  const lr = new Date(lastRead);
+  return (x.conversations || []).reduce((s, c) => s + (c.messages || []).filter(m => m.from !== "me" && new Date(m.ts) > lr).length, 0);
+};
+
 const ahOpts=[{label:"Any time",value:"any"},{label:"Morning 6AM-12PM",value:"6am-12pm"},{label:"Afternoon 12-6PM",value:"12pm-6pm"},{label:"Evening 6-11PM",value:"6pm-11pm"},{label:"Business 9AM-6PM",value:"9am-6pm"},{label:"After work 6-10PM",value:"6pm-10pm"},{label:"Daytime 8AM-8PM",value:"8am-8pm"},{label:"Night 8PM-2AM",value:"8pm-2am"}];
 const getAH=v=>ahOpts.find(o=>o.value===v)?.label||v;
 const durOpts=[{label:"1 hour",value:"1h"},{label:"6 hours",value:"6h"},{label:"24 hours",value:"24h"},{label:"7 days",value:"7d"},{label:"30 days",value:"30d"},{label:"No expiry",value:"never"}];
@@ -259,6 +272,10 @@ export default function App(){
   const activeL=sideQ?allActive.filter(x=>xidMatch(x,sideQ)):allActive;
   const closedL=sideQ?allClosed.filter(x=>xidMatch(x,sideQ)):allClosed;
   const totM=x=>(x.conversations||[]).reduce((s,c)=>s+(c.messages||[]).length,0);
+  const totalUnread=xids.reduce((s,x)=>s+getUnread(x),0);
+
+  // Update browser tab title with unread count
+  useEffect(()=>{document.title=totalUnread>0?`(${totalUnread}) XIDgate`:"XIDgate";},[totalUnread]);
 
   const createXid=async d=>{
     const mc=d.maxConn===""?null:(d.maxConn===0?0:parseInt(d.maxConn));const mm=d.maxMsgs===""?null:(d.maxMsgs===0?0:parseInt(d.maxMsgs));
@@ -325,7 +342,7 @@ export default function App(){
     await loadXids(user.id);setShowAccept(false);setToast("Connected to "+xid.label+"!");
   };
   const cp=v=>{navigator.clipboard?.writeText(v);setToast("Copied!");};
-  const openX=(x,c)=>{setActXid(x);setActConvo(x.xidType==="group"?(x.conversations[0]||null):(c||x.conversations[0]||null));setView("chat");};
+  const openX=(x,c)=>{markRead(x.id);setActXid(x);setActConvo(x.xidType==="group"?(x.conversations[0]||null):(c||x.conversations[0]||null));setView("chat");};
 
   return(<div style={S.root}><style>{CSS}</style>
     <nav style={S.side}>
@@ -338,10 +355,13 @@ export default function App(){
       <div style={S.navB}>
         <div style={S.navLabel}>ACTIVE</div>
         {activeL.length===0&&<div style={S.navEmpty}>{sideQ?"No matches":"No active XIDs"}</div>}
-        {activeL.map(x=><button key={x.id} style={{...S.navItem,background:actXid?.id===x.id&&view==="chat"?"rgba(229,168,53,0.05)":"transparent",borderLeft:actXid?.id===x.id&&view==="chat"?"2px solid #E5A835":"2px solid transparent"}} onClick={()=>openX(x)}>
-          <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><span style={{color:x.xidType==="group"?"#1B4F72":"#4a5568",display:"flex"}}>{x.xidType==="group"?<I.Users/>:<I.User/>}</span><span style={{fontSize:11.5,fontWeight:600,color:"#c8cdd5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</span>{!x.isOwner&&<span style={{fontSize:7.5,padding:"1px 4px",borderRadius:3,background:"rgba(229,168,53,0.1)",color:"#E5A835",fontWeight:700}}>JOINED</span>}</div></div>
-          <span style={{fontSize:9,color:"#3d4555"}}>{fmtLeft(x.expires_at)}</span>
-        </button>)}
+        {activeL.map(x=>{const unread=getUnread(x);return<button key={x.id} style={{...S.navItem,background:actXid?.id===x.id&&view==="chat"?"rgba(229,168,53,0.05)":unread>0?"rgba(229,168,53,0.02)":"transparent",borderLeft:actXid?.id===x.id&&view==="chat"?"2px solid #E5A835":"2px solid transparent"}} onClick={()=>openX(x)}>
+          <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><span style={{color:x.xidType==="group"?"#1B4F72":"#4a5568",display:"flex"}}>{x.xidType==="group"?<I.Users/>:<I.User/>}</span><span style={{fontSize:11.5,fontWeight:unread>0?700:600,color:unread>0?"#fff":"#c8cdd5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.label}</span>{!x.isOwner&&<span style={{fontSize:7.5,padding:"1px 4px",borderRadius:3,background:"rgba(229,168,53,0.1)",color:"#E5A835",fontWeight:700}}>JOINED</span>}</div></div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+            <span style={{fontSize:9,color:"#3d4555"}}>{fmtLeft(x.expires_at)}</span>
+            {unread>0&&<span style={{fontSize:9,fontWeight:700,color:"#1a1207",background:"#E5A835",borderRadius:8,padding:"1px 5px",minWidth:16,textAlign:"center"}}>{unread}</span>}
+          </div>
+        </button>})}
       </div>
       <div style={S.navB}>
         <div style={S.navLabel}>CLOSED</div>
@@ -399,14 +419,16 @@ function Dash({xids,dashQ,setDashQ,onCreate,onOpen,onCp,onKill,onShare,tm,onAcce
 /* ═══ CARD ═══ */
 function Card({x,i,onOpen,onCp,onKill,onShare,tm}){
   const act=x.status==="active",isG=x.xidType==="group";
-  return(<div style={{background:"rgba(255,255,255,0.015)",border:"1px solid",borderColor:act?"rgba(229,168,53,0.08)":"rgba(255,255,255,0.03)",borderRadius:10,padding:13,position:"relative",overflow:"hidden"}}>
+  const unread=getUnread(x);
+  return(<div style={{background:unread>0?"rgba(229,168,53,0.02)":"rgba(255,255,255,0.015)",border:"1px solid",borderColor:unread>0?"rgba(229,168,53,0.15)":act?"rgba(229,168,53,0.08)":"rgba(255,255,255,0.03)",borderRadius:10,padding:13,position:"relative",overflow:"hidden"}}>
+    {unread>0&&<div style={{position:"absolute",top:10,right:10,fontSize:10,fontWeight:700,color:"#1a1207",background:"#E5A835",borderRadius:10,padding:"2px 7px",minWidth:20,textAlign:"center",boxShadow:"0 2px 8px rgba(229,168,53,0.3)"}}>{unread} new</div>}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
       <div><div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
         <span style={{fontSize:8.5,fontWeight:700,padding:"2px 5px",borderRadius:3,display:"flex",alignItems:"center",gap:2,background:isG?"rgba(27,79,114,0.1)":"rgba(229,168,53,0.08)",color:isG?"#1B4F72":"#E5A835"}}>{isG?<><I.Users/> GRP</>:<><I.User/> 1:1</>}</span>
         <span style={{fontSize:8.5,fontWeight:600,padding:"2px 5px",borderRadius:3,background:act?"rgba(72,187,120,0.1)":"rgba(255,255,255,0.04)",color:act?"#48bb78":x.status==="revoked"?"#e85d5d":"#4a5568"}}>{act?"Live":x.status}</span>
         {!x.isOwner&&<span style={{fontSize:7,padding:"1px 4px",borderRadius:2,background:"rgba(229,168,53,0.08)",color:"#E5A835",fontWeight:700}}>JOINED</span>}
       </div><h3 style={{fontSize:13,fontWeight:700,color:"#e2e8f0"}}>{x.label}</h3></div>
-      {act&&x.isOwner&&<button style={{padding:5,borderRadius:5,background:"rgba(229,168,53,0.05)",color:"#E5A835"}} onClick={e=>{e.stopPropagation();onShare();}}><I.Share/></button>}
+      {act&&x.isOwner&&!unread&&<button style={{padding:5,borderRadius:5,background:"rgba(229,168,53,0.05)",color:"#E5A835"}} onClick={e=>{e.stopPropagation();onShare();}}><I.Share/></button>}
     </div>
     <button style={S.xidBtn} onClick={e=>{e.stopPropagation();onCp();}}><code>{x.xid||x.xid_code}</code><I.Copy/></button>
     <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}><span style={S.tag}><I.Clock/>{fmtLeft(x.expires_at)}</span><span style={S.tag}><I.Chat/>{tm}{x.maxMsgs!=null?`/${x.maxMsgs}`:""} msgs</span><span style={S.tag}><I.Users/>{(x.allConversations||x.conversations||[]).length}{x.maxConn!=null?`/${x.maxConn}`:""} connected</span>{(x.activeHours||x.active_hours)&&(x.activeHours||x.active_hours)!=="any"&&<span style={S.tag}>{getAH(x.activeHours||x.active_hours)}</span>}</div>
