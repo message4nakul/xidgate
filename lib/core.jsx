@@ -215,11 +215,24 @@ export function QRCode({ value, size = 180, quiet = 4 }) {
 /* Viewport hook. Inline styles can't hold media queries and this product is
    mobile-first in practice, so layout switches are driven from state. */
 export function useNarrow(bp = 760) {
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < bp);
+  /* Starts false so the server render and the first client render agree — a
+     hydration mismatch here makes React throw away the corrected layout.
+
+     The measurement then happens on mount, which is the only moment a phone
+     will ever report its real width. Registering a resize listener and waiting
+     is useless on a handset: nobody resizes a phone, so the layout would stay
+     stuck on the desktop branch forever. This bug is invisible on a laptop,
+     because dragging the window fires resize and everything snaps into place. */
+  const [narrow, setNarrow] = useState(false);
   useEffect(() => {
-    const on = () => setNarrow(window.innerWidth < bp);
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    const measure = () => setNarrow(window.innerWidth < bp);
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
   }, [bp]);
   return narrow;
 }
