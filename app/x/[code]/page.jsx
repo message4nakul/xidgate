@@ -313,6 +313,38 @@ export default function GuestPage() {
         )}
 
         {!thread.blocked && (
+          <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.ruleSoft}`,
+            background: thread.keepMe && thread.keepThem ? T.liveWash : "#FAFBFC" }}>
+            {thread.keepMe && thread.keepThem ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live, flexWrap: "wrap" }}>
+                <Ico.Shield size={16} />
+                <span style={{ flex: 1, minWidth: 190 }}>
+                  <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It stays readable after the pass ends.
+                </span>
+                <Btn size="sm" kind="ghost"
+                  onClick={async () => { try { await guest.setKeep(code, xid.id, false); await load(); } catch (e) { setErr(e.message); } }}>
+                  Stop keeping
+                </Btn>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12.5, color: T.mute, flex: 1, minWidth: 190 }}>
+                  {thread.keepMe
+                    ? "You've asked to keep this. It's still deleted when the pass ends unless they agree too."
+                    : thread.keepThem
+                      ? "They've asked to keep this past the end date. It's only kept if you agree as well."
+                      : "This is deleted when the pass ends. If you both agree, it can be kept."}
+                </span>
+                <Btn size="sm" kind="quiet" icon={Ico.Shield} disabled={thread.keepMe}
+                  onClick={async () => { try { await guest.setKeep(code, xid.id, true); await load(); } catch (e) { setErr(e.message); } }}>
+                  {thread.keepMe ? "You've agreed" : "Keep this"}
+                </Btn>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!thread.blocked && (
           <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: both ? T.liveWash : "#FAFBFC" }}>
             {both ? (
               <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live }}>
@@ -327,7 +359,7 @@ export default function GuestPage() {
                       : "Want to keep talking after this ends? You can swap real details if you both agree."}
                 </span>
                 <Btn size="sm" kind={thread.revealMe ? "quiet" : "primary"} icon={Ico.Handshake} disabled={thread.revealMe}
-                  onClick={async () => { await guest.reveal(code, thread.connId); load(); }}>
+                  onClick={async () => { try { await guest.reveal(code, xid.id); await load(); } catch (e) { setErr(e.message); } }}>
                   {thread.revealMe ? "You've agreed" : "Swap real contact"}
                 </Btn>
               </div>

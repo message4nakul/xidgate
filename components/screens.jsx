@@ -307,7 +307,7 @@ export function ShareSheet({ x, onClose }) {
 }
 
 /* ------------------------------------------------------------------ chat -- */
-export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare }) {
+export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep }) {
   const narrow = useNarrow();
   const [cid, setCid] = useState(x.conversations[0]?.id ?? null);
   const [draft, setDraft] = useState("");
@@ -427,6 +427,38 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare }) {
             })}
             <div ref={endRef} />
           </div>
+
+          {/* Mutual keep. Both sides must agree, and the copy is explicitly not
+              the default — otherwise "we keep nothing" stops being true. */}
+          {live && cur && !cur.blocked && (
+            <div style={{ padding: "10px 22px", borderTop: `1px solid ${T.ruleSoft}`,
+              background: cur.keepMe && cur.keepThem ? T.liveWash : "#FAFBFC" }}>
+              {cur.keepMe && cur.keepThem ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live, flexWrap: "wrap" }}>
+                  <Ico.Shield size={16} />
+                  <span style={{ flex: 1, minWidth: 200 }}>
+                    <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It survives the pass ending, and either of you can still read it. Nothing else about the pass changes.
+                  </span>
+                  <Btn size="sm" kind="ghost" onClick={() => onKeep(x.id, cur.id, false)}>Stop keeping</Btn>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12.5, color: T.mute, flex: 1, minWidth: 200 }}>
+                    {cur.keepMe
+                      ? "You've asked to keep this. It's still deleted when the pass ends unless they agree too."
+                      : cur.keepThem
+                        ? "They've asked to keep this conversation past the end date. It's only kept if you agree as well."
+                        : "By default this is deleted when the pass ends. If you both agree, it can be kept."}
+                  </span>
+                  <Btn size="sm" kind={cur.keepMe ? "quiet" : "quiet"} icon={Ico.Shield}
+                    disabled={cur.keepMe}
+                    onClick={() => onKeep(x.id, cur.id, true)}>
+                    {cur.keepMe ? "You've agreed" : "Keep this"}
+                  </Btn>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* reveal handshake */}
           {live && x.type === "individual" && cur && !cur.blocked && (
@@ -562,11 +594,11 @@ export function Ledger({ state }) {
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 820, margin: "0 auto" }}>
       <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>Destruction ledger</h1>
       <p style={{ margin: "0 0 26px", fontSize: 14, color: T.mute, maxWidth: 560, lineHeight: 1.5 }}>
-        A receipt for every pass that ended. We keep the counts and the timestamps so you can prove it happened. The messages themselves are gone — we can't show them to you, or to anyone else.
+        A receipt for every pass that ended. We keep the counts and the timestamps so you can prove it happened. The messages themselves are gone — unless both you and the other person explicitly agreed to keep a conversation, which is counted separately below.
       </p>
 
       <div style={{ display: "flex", gap: 26, padding: "18px 22px", background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, marginBottom: 18, flexWrap: "wrap" }}>
-        {[["Passes destroyed", all.length], ["Messages erased", total], ["Kept on our servers", 0]].map(([k, v]) => (
+        {[["Passes destroyed", all.length], ["Messages erased", total], ["Kept by mutual consent", state.kept || 0]].map(([k, v]) => (
           <div key={k}>
             <div style={{ fontFamily: MONO, fontSize: 27, fontWeight: 500, color: T.ink, letterSpacing: "-0.02em" }}>{v}</div>
             <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: T.mute, marginTop: 3 }}>{k}</div>
