@@ -270,7 +270,7 @@ export const Ico = {
    is: pick why → issue. Everything else lives behind "Adjust rules".        */
 export const PRESETS = [
   { id: "sell", title: "Selling something", blurb: "Buyers message you. Nobody keeps your number.", dur: "7d", conn: null, msgs: null, hours: "any", type: "individual", label: "For sale" },
-  { id: "meet", title: "Meeting someone new", blurb: "One person, one day, then it's gone.", dur: "24h", conn: 1, msgs: null, hours: "any", type: "individual", oneShot: true, label: "New contact" },
+  { id: "meet", title: "Meeting someone new", blurb: "One person, one day, then it's gone.", dur: "24h", conn: null, msgs: null, hours: "any", type: "individual", oneShot: true, label: "New contact" },
   { id: "quote", title: "Getting a quote", blurb: "Contractors reach you during work hours only.", dur: "3d", conn: 5, msgs: null, hours: "9-18", type: "individual", label: "Quote request" },
   { id: "work", title: "A client or job", blurb: "A month of access, on your schedule.", dur: "30d", conn: 3, msgs: null, hours: "9-18", type: "individual", label: "Client channel" },
   { id: "group", title: "A group", blurb: "Everyone in one room. No numbers exchanged.", dur: "7d", conn: 20, msgs: null, hours: "any", type: "group", label: "Group room" },
