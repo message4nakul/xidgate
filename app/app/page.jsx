@@ -133,7 +133,7 @@ export default function HostApp() {
           {view === "issue" && (
             <Issue state={state} go={go} onIssue={async (cfg, pid) => {
               try {
-                const x = await db.issue(cfg, pid);
+                const x = await db.issue(cfg, pid, state.plan);
                 await refresh();
                 setShare(x);
                 setView("passes");
@@ -157,7 +157,9 @@ export default function HostApp() {
                 const c = open.conversations.find((v) => v.id === cid);
                 return db.setBlocked(xid, cid, !c.blocked);
               })}
-              onReveal={act((xid, cid, who) => db.reveal(xid, cid, who))} />
+              onReveal={act((xid, cid, who) => db.reveal(xid, cid, who))}
+              onKeep={act((xid, cid, on) => db.setKeep(xid, cid, on),
+                "Saved. It's kept only once they agree too.")} />
           )}
         </main>
       </div>

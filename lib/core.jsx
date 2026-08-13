@@ -675,7 +675,12 @@ export const db = {
      shape the UI already expects. Three round trips regardless of how many
      passes you have — don't turn this into a per-pass loop. */
   async load() {
-    if (!LIVE) return memory();
+    if (!LIVE) {
+      const m = memory();
+      m.kept = m.xids.reduce((n, x) =>
+        n + x.conversations.filter((c) => c.keepMe && c.keepThem).length, 0);
+      return m;
+    }
 
     const [{ data: prof }, { data: xids }, { data: receipts }] = await Promise.all([
       sb.from("profiles").select("plan, plan_until").maybeSingle(),
@@ -711,13 +716,18 @@ export const db = {
         id: c.id, guest: c.guest_label, joinedAt: new Date(c.joined_at).getTime(),
         blocked: c.blocked, strikes: c.strikes,
         revealMe: c.reveal_host, revealThem: c.reveal_guest,
+        keepMe: c.keep_host, keepThem: c.keep_guest,
         messages: byConn.get(c.id) ?? [],
       });
     }
 
+    /* Counted, not assumed. The ledger claims we keep nothing, so it must be
+       able to say truthfully when that stops being true. */
+    const kept = conns.filter((c) => c.keep_host && c.keep_guest).length;
     const planActive = prof?.plan === "pro" && (!prof.plan_until || new Date(prof.plan_until) > new Date());
     return {
       plan: planActive ? "pro" : "free",
+      kept,
       xids: out,
       receipts: (receipts ?? []).map((r) => ({
         id: r.id, code: r.code, label: r.label, reason: r.reason,
@@ -799,6 +809,19 @@ export const db = {
       return;
     }
     await sb.from("connections").update({ blocked }).eq("id", connId);
+  },
+
+  /* Half of a mutual agreement. Nothing survives expiry until the other side
+     agrees too — which is what stops this quietly becoming retention. */
+  async setKeep(xidId, connId, on) {
+    if (!LIVE) {
+      const x = memory().xids.find((v) => v.id === xidId);
+      const c = x?.conversations.find((v) => v.id === connId);
+      if (c) c.keepMe = on;
+      return;
+    }
+    const { error } = await sb.from("connections").update({ keep_host: on }).eq("id", connId);
+    if (error) throw new Error(friendly(error));
   },
 
   async reveal(xidId, connId, who) {
@@ -891,7 +914,7 @@ export const guest = {
       const x = memory().xids.find((v) => v.code === code);
       const token = readToken(code);
       const c = x?.conversations.find((v) => v.id === token);
-      return c ? { connId: c.id, claimed: !!c.claimed, blocked: c.blocked, revealMe: c.revealThem, revealThem: c.revealMe, messages: c.messages.map((m) => ({ ...m, side: m.side === "me" ? "them" : "me" })) } : null;
+      return c ? { connId: c.id, claimed: !!c.claimed, blocked: c.blocked, keepMe: !!c.keepThem, keepThem: !!c.keepMe, revealMe: c.revealThem, revealThem: c.revealMe, messages: c.messages.map((m) => ({ ...m, side: m.side === "me" ? "them" : "me" })) } : null;
     }
     const g = guestClient(code);
     if (!g) return null;
@@ -903,6 +926,7 @@ export const guest = {
     return {
       connId: conn.id, blocked: conn.blocked, claimed: !!conn.guest_user,
       revealMe: conn.reveal_guest, revealThem: conn.reveal_host,
+      keepMe: conn.keep_guest, keepThem: conn.keep_host,
       messages: (msgs ?? []).map((m) => ({
         id: m.id, side: m.from_host ? "them" : "me",
         text: m.body, ts: new Date(m.created_at).getTime(),
@@ -941,15 +965,31 @@ export const guest = {
     return true;
   },
 
-  async reveal(code, connId) {
+  /* Goes through a function, not a table update. Guests have no UPDATE policy on
+     connections by design: row-level security cannot restrict which columns a
+     write touches, and a guest must never be able to clear their own 'blocked'
+     flag. The old table update returned 200 and changed nothing, so the
+     handshake looked accepted to the guest and never reached the host. */
+  async reveal(code, xidId) {
     if (!LIVE) {
       const x = memory().xids.find((v) => v.code === code);
-      const token = localStorage.getItem(guestKey(code));
-      const c = x?.conversations.find((v) => v.id === token);
+      const c = x?.conversations.find((v) => v.id === readToken(code));
       if (c) c.revealThem = true;
       return;
     }
-    await guestClient(code).from("connections").update({ reveal_guest: true }).eq("id", connId);
+    const { error } = await guestClient(code).rpc("guest_set_reveal", { p_xid: xidId });
+    if (error) throw new Error(friendly(error));
+  },
+
+  async setKeep(code, xidId, on) {
+    if (!LIVE) {
+      const x = memory().xids.find((v) => v.code === code);
+      const c = x?.conversations.find((v) => v.id === readToken(code));
+      if (c) c.keepThem = on;
+      return;
+    }
+    const { error } = await guestClient(code).rpc("guest_set_keep", { p_xid: xidId, p_on: on });
+    if (error) throw new Error(friendly(error));
   },
 
   watch(code, xidId, cb) {
@@ -1012,6 +1052,7 @@ function friendly(error) {
   if (m.includes("QUIET_HOURS")) return "It's outside the hours this pass accepts messages.";
   if (m.includes("MESSAGE_CAP")) return "This pass has reached its message limit.";
   if (m.includes("RATE_LIMIT")) return "Too many messages too quickly. Slow down and try again.";
+  if (m.includes("NOT_A_GUEST")) return "This conversation is no longer open to you.";
   if (m.includes("NOT_SIGNED_IN")) return "Create an account first, then we can keep this for you.";
   if (m.includes("CLAIM_FAILED")) return "This conversation is already linked to an account.";
   return "Something went wrong. Try again.";
