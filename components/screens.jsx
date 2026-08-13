@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, auth, clock, countdown, db, expiryFrom, hoursMeta, linkFor, nextOpen, preset, selectStyle, stampDate, useNarrow, withinHours } from "@/lib/core";
+import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, auth, clock, countdown, db, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, preset, selectStyle, stampDate, useNarrow, withinHours } from "@/lib/core";
 
 /* ------------------------------------------------------------- dashboard -- */
-export function Dashboard({ state, go, onKill, onKillAll, onShare }) {
+export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
   const narrow = useNarrow();
   const [q, setQ] = useState("");
   const live = state.xids.filter((x) => x.status === "active");
@@ -71,6 +71,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare }) {
             <Pass key={x.id} x={x}
               onOpen={() => go("chat", x.id)}
               onShare={() => onShare(x)}
+              onReopen={onReopen ? () => onReopen(x) : undefined}
               onKill={() => onKill(x)} />
           ))}
         </div>
@@ -151,15 +152,16 @@ export function Issue({ state, go, onIssue }) {
             </select>
           </Field>
 
-          <Field label="How many people" hint={cfg.type === "group" ? "Everyone lands in one shared room." : "Each person gets their own private thread. They can't see each other."}>
-            <select value={cfg.conn === null ? "any" : String(cfg.conn)} onChange={(e) => setCfg((c) => ({ ...c, conn: e.target.value === "any" ? null : Number(e.target.value) }))} style={selectStyle}>
-              <option value="1">Just 1 person</option>
-              <option value="2">Up to 2</option>
-              <option value="3">Up to 3</option>
-              <option value="5">Up to 5</option>
-              <option value="10">Up to 10</option>
-              <option value="20">Up to 20</option>
-              <option value="any">Anyone with the link</option>
+          <Field label="How many people"
+            hint={cfg.oneShot
+              ? "The link stops working the moment they join — even if it gets forwarded. You can let someone else in later if you need to."
+              : cfg.type === "group"
+                ? "Everyone lands in one shared room."
+                : "Each person gets their own private thread. They can't see each other."}>
+            <select value={peopleValue(cfg)}
+              onChange={(e) => { const o = peopleOption(e.target.value); setCfg((c) => ({ ...c, conn: o.conn, oneShot: o.oneShot })); }}
+              style={selectStyle}>
+              {PEOPLE.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
             </select>
           </Field>
 
@@ -175,9 +177,6 @@ export function Issue({ state, go, onIssue }) {
 
           {adv && (
             <div style={{ marginBottom: 20 }}>
-              <Toggle on={cfg.oneShot} onChange={(v) => setCfg((c) => ({ ...c, oneShot: v }))}
-                label="Close after the first person joins"
-                sub="The link stops working the moment someone uses it. Nobody else can get in — even if it's been forwarded." />
               <Toggle on={cfg.autoExtend} onChange={(v) => setCfg((c) => ({ ...c, autoExtend: v }))}
                 label="Add an hour when you're mid-conversation"
                 sub="If either of you messaged in the last hour, the timer stretches — up to twice the original length. Stops deals dying at the wrong moment." />
@@ -250,9 +249,8 @@ export function ShareSheet({ x, onClose }) {
 
       <div style={{ borderTop: `1px solid ${T.ruleSoft}`, paddingTop: 14, fontSize: 12.5, color: T.mute, lineHeight: 1.6 }}>
         Ends {stampDate(x.expiresAt)}
-        {x.maxConn ? ` · ${x.maxConn} ${x.maxConn === 1 ? "person" : "people"} max` : " · anyone with the link"}
+        {x.oneShot ? " · 1 person, then it closes" : x.maxConn ? ` · ${x.maxConn} people max` : " · anyone with the link"}
         {x.hours !== "any" ? ` · ${hoursMeta(x.hours).label.toLowerCase()}` : ""}
-        {x.oneShot ? " · closes after the first join" : ""}
       </div>
     </Modal>
   );
