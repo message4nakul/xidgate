@@ -46,6 +46,32 @@ export const ORIGIN =
   typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "https://xidgate.com");
 export const linkFor = (code) => `${ORIGIN}/x/${code}`;
 
+/* Duration is typed, not picked from a list, because the right answer depends on
+   the conversation: a bike sale is days, a contractor is weeks, a tenant is
+   months. The preset options remain as starting points.
+
+   There is deliberately no "never expires". A pass that never ends is a phone
+   number with extra steps — it breaks the one promise the product makes, and it
+   turns storage from O(active passes) into O(everything ever). Long is fine;
+   forever is a different product. */
+export const UNITS = [
+  { v: "hours",  label: "hours",  ms: 36e5 },
+  { v: "days",   label: "days",   ms: 864e5 },
+  { v: "weeks",  label: "weeks",  ms: 6048e5 },
+  { v: "months", label: "months", ms: 2592e6 },
+];
+export const unitMs = (u) => (UNITS.find((x) => x.v === u) || UNITS[1]).ms;
+export const customMs = (n, u) => Math.max(1, Math.floor(Number(n) || 1)) * unitMs(u);
+export const planCapMs = (plan) => (plan === "pro" ? 365 * 864e5 : 7 * 864e5);
+export const planCapLabel = (plan) => (plan === "pro" ? "12 months" : "7 days");
+
+/* Presets still speak in fixed strings; this turns one into an editable value. */
+export const durToParts = (d) => {
+  const m = { "1h": [1, "hours"], "6h": [6, "hours"], "24h": [24, "hours"],
+              "3d": [3, "days"], "7d": [7, "days"], "30d": [30, "days"] }[d] || [24, "hours"];
+  return { durN: m[0], durUnit: m[1] };
+};
+
 export const DUR = {
   "1h": 36e5, "6h": 216e5, "24h": 864e5,
   "3d": 2592e5, "7d": 6048e5, "30d": 25920e5,
@@ -701,8 +727,12 @@ export const db = {
     };
   },
 
-  async issue(cfg, presetId) {
-    const expires = expiryFrom(cfg.dur);
+  async issue(cfg, presetId, plan = "free") {
+    /* Clamp here rather than only in the interface: the ceiling is a billing
+       rule, and billing rules that live only in the UI are not rules. */
+    const wanted = cfg.durN ? customMs(cfg.durN, cfg.durUnit) : (DUR[cfg.dur] ?? 864e5);
+    const span = Math.min(wanted, planCapMs(plan));
+    const expires = Date.now() + span;
     if (!LIVE) {
       const x = {
         id: uid(), code: newCode(), label: cfg.label || preset(presetId).label,
@@ -722,7 +752,7 @@ export const db = {
       preset: presetId, kind: cfg.type, max_conn: cfg.conn, max_msgs: cfg.msgs,
       hours: cfg.hours, one_shot: cfg.oneShot, auto_extend: cfg.autoExtend,
       expires_at: new Date(expires).toISOString(),
-      hard_expiry: new Date(Date.now() + (DUR[cfg.dur] ?? 864e5) * 2).toISOString(),
+      hard_expiry: new Date(Date.now() + Math.min(span * 2, planCapMs(plan) * 2)).toISOString(),
     }).select().single();
     if (error) throw error;
     return shape(data);
@@ -933,6 +963,44 @@ export const guest = {
     return () => g.removeChannel(ch);
   },
 };
+
+/* Lets either side keep their own record before a pass ends. This is the honest
+   answer to "I need this conversation later": the copy lives with the person who
+   asked for it, and the server still keeps nothing. */
+export function buildTranscript(x, conv, whoAmI) {
+  const when = (ts) => new Date(ts).toLocaleString();
+  const lines = [
+    `XIDgate conversation`,
+    `Pass:    ${x.label}  (${x.code})`,
+    `Opened:  ${when(x.createdAt)}`,
+    `Ends:    ${when(x.expiresAt)}`,
+    `With:    ${conv.guest}`,
+    `Saved:   ${when(Date.now())} by ${whoAmI}`,
+    ``,
+    `This is a personal copy. XIDgate deletes the original when the pass ends.`,
+    `─`.repeat(60),
+    ``,
+  ];
+  for (const m of conv.messages) {
+    const who = m.side === "me" ? (whoAmI === "host" ? "You" : "You") : conv.guest;
+    lines.push(`[${when(m.ts)}] ${who}: ${m.text}`);
+  }
+  return lines.join("\n");
+}
+
+export function downloadTranscript(x, conv, whoAmI) {
+  const text = buildTranscript(x, conv, whoAmI);
+  const safe = (x.label || "conversation").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `xidgate-${safe || "conversation"}-${x.code}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  return text;
+}
 
 /* The database raises named errors so the interface can explain what happened
    instead of showing a stack trace. Keep these in sync with schema.sql. */
