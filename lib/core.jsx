@@ -278,6 +278,30 @@ export const PRESETS = [
 ];
 export const preset = (id) => PRESETS.find((p) => p.id === id) || PRESETS[5];
 
+/* "How many people" used to be two controls that did the same thing. A numeric
+   cap of 1 and "close after the first person joins" look identical to a guest —
+   both admit one person and reject everyone after. They differ only in what the
+   host can undo afterwards:
+
+     a cap is a ceiling  — recounted on every attempt, so it can never reopen
+     one-shot is a latch — flipped on first join, and the host can flip it back
+
+   So "just 1 person" is implemented as the latch. Offering both was the bug:
+   the "Meeting someone new" preset set a cap AND the latch, which made the
+   reopen control silently do nothing on the passes most likely to need it. */
+export const PEOPLE = [
+  { v: "one", label: "Just 1 person — closes as soon as they join", conn: null, oneShot: true },
+  { v: "2",   label: "Up to 2 people",  conn: 2,  oneShot: false },
+  { v: "3",   label: "Up to 3 people",  conn: 3,  oneShot: false },
+  { v: "5",   label: "Up to 5 people",  conn: 5,  oneShot: false },
+  { v: "10",  label: "Up to 10 people", conn: 10, oneShot: false },
+  { v: "20",  label: "Up to 20 people", conn: 20, oneShot: false },
+  { v: "any", label: "Anyone with the link", conn: null, oneShot: false },
+];
+export const peopleValue = (cfg) =>
+  cfg.oneShot ? "one" : cfg.conn === null ? "any" : String(cfg.conn);
+export const peopleOption = (v) => PEOPLE.find((p) => p.v === v) || PEOPLE[PEOPLE.length - 1];
+
 export const PLAN = {
   free: { name: "Free", passes: 3, maxDur: "7d", price: "₹0" },
   pro: { name: "Pro", passes: Infinity, maxDur: "30d", price: "₹99/mo" },
@@ -363,7 +387,7 @@ export function Chip({ tone = "mute", children }) {
 /* Every XID is a physical-feeling access pass: a perforated stub carrying the
    code, a countdown as the hero number, and a drain bar. Killing it stamps
    VOID across the face. The metaphor is the product.                        */
-export function Pass({ x, onOpen, onShare, onKill, compact = false }) {
+export function Pass({ x, onOpen, onShare, onKill, onReopen, compact = false }) {
   const live = x.status === "active";
   const left = x.expiresAt - Date.now();
   const cd = countdown(left);
@@ -421,7 +445,7 @@ export function Pass({ x, onOpen, onShare, onKill, compact = false }) {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Ico.Users size={12} />{conns}{x.maxConn ? `/${x.maxConn}` : ""}</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Ico.Msg size={12} />{msgs}</span>
           {x.hours !== "any" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: withinHours(x.hours) ? T.mute : T.amber }}><Ico.Clock size={12} />{withinHours(x.hours) ? "open" : "quiet"}</span>}
-          {x.oneShot && <Chip tone="signal">one‑shot</Chip>}
+          {x.oneShot && <Chip tone={x.sealed ? "warn" : "signal"}>{x.sealed ? "closed to new" : "one‑shot"}</Chip>}
           {x.unread > 0 && live && <span style={{ marginLeft: "auto", background: T.signal, color: "#fff", borderRadius: 9, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>{x.unread} new</span>}
         </div>
 
@@ -429,6 +453,9 @@ export function Pass({ x, onOpen, onShare, onKill, compact = false }) {
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
             <Btn size="sm" kind={x.unread > 0 ? "primary" : "quiet"} icon={Ico.Msg} onClick={onOpen}>Open</Btn>
             {live && <Btn size="sm" kind="quiet" icon={Ico.QR} onClick={onShare}>Share</Btn>}
+            {live && x.sealed && onReopen && (
+              <Btn size="sm" kind="quiet" icon={Ico.Users} onClick={onReopen}>Let someone else in</Btn>
+            )}
             {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={onKill}>Kill</Btn>}
           </div>
         )}
@@ -517,14 +544,53 @@ export const sb = LIVE
 /* Guests hold a token in their own browser instead of an account. It goes out
    as a header so row-level security can authorise someone with no login. */
 export const guestKey = (code) => `xid_token_${code}`;
+
+/* A guest's token is their only claim to the conversation, so it is written to
+   two places. localStorage is the primary store; the cookie is the backup,
+   because iOS Safari evicts localStorage after roughly seven days of not
+   visiting a site — and for a guest, losing the token means losing the whole
+   conversation with no way to prove it was theirs. */
+const TOKEN_DAYS = 180;
+
+function readCookie(name) {
+  if (typeof document === "undefined") return null;
+  const hit = document.cookie.split("; ").find((c) => c.startsWith(name + "="));
+  return hit ? decodeURIComponent(hit.slice(name.length + 1)) : null;
+}
+
+function writeCookie(name, value) {
+  if (typeof document === "undefined") return;
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${TOKEN_DAYS * 86400}; path=/; SameSite=Lax${secure}`;
+}
+
+export function readToken(code) {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(guestKey(code)) || readCookie(guestKey(code));
+}
+
+export function writeToken(code, token) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(guestKey(code), token); } catch (_) {}
+  writeCookie(guestKey(code), token);
+}
+
+/* Two ways to be recognised as a guest:
+   1. holding the token — the default, no account involved
+   2. being signed in as the account that claimed this conversation — the
+      opt-in path, and the only one that survives changing device
+   The signed-in client carries the session, so row-level security matches on
+   connections.guest_user instead of the header. */
 export function guestClient(code) {
   if (!LIVE) return null;
-  const token = typeof window !== "undefined" ? localStorage.getItem(guestKey(code)) : null;
-  if (!token) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false },
-    global: { headers: { "x-xid-token": token } },
-  });
+  const token = readToken(code);
+  if (token) {
+    return createClient(url, key, {
+      auth: { persistSession: false },
+      global: { headers: { "x-xid-token": token } },
+    });
+  }
+  return sb;
 }
 
 /* =============================================================================
@@ -717,6 +783,19 @@ export const db = {
       .eq("id", connId);
   },
 
+  /* Lets a host readmit someone after a one-shot pass has closed. Without it a
+     guest who loses their token on a sealed pass is locked out for good and
+     neither side can fix it. */
+  async unseal(xidId) {
+    if (!LIVE) {
+      const x = memory().xids.find((v) => v.id === xidId);
+      if (x) x.sealed = false;
+      return;
+    }
+    const { error } = await sb.rpc("unseal_xid", { p_id: xidId });
+    if (error) throw new Error(friendly(error));
+  },
+
   async setPlan(plan, days) {
     if (!LIVE) { memory().plan = plan; return; }
     const { data: u } = await sb.auth.getUser();
@@ -742,7 +821,7 @@ export const db = {
 /* ----------------------------------------------------------------- guest -- */
 export const guest = {
   hasToken(code) {
-    return typeof window !== "undefined" && !!localStorage.getItem(guestKey(code));
+    return !!readToken(code);
   },
 
   async lookup(code) {
@@ -766,23 +845,23 @@ export const guest = {
       if (x.maxConn !== null && x.conversations.length >= x.maxConn) throw new Error("XID_FULL");
       const c = { id: uid(), guest: name || "Guest", joinedAt: Date.now(), blocked: false, strikes: 0, revealMe: false, revealThem: false, messages: [] };
       x.conversations.push(c);
-      localStorage.setItem(guestKey(code), c.id);
+      writeToken(code, c.id);
       if (x.oneShot) x.sealed = true;
       return { connId: c.id, xidId: x.id };
     }
     const { data, error } = await sb.rpc("join_xid", { p_code: code, p_label: name });
     if (error) throw new Error(friendly(error));
     const row = Array.isArray(data) ? data[0] : data;
-    localStorage.setItem(guestKey(code), row.conn_token);
+    writeToken(code, row.conn_token);
     return { xidId: row.xid };
   },
 
   async thread(code, xidId) {
     if (!LIVE) {
       const x = memory().xids.find((v) => v.code === code);
-      const token = localStorage.getItem(guestKey(code));
+      const token = readToken(code);
       const c = x?.conversations.find((v) => v.id === token);
-      return c ? { connId: c.id, blocked: c.blocked, revealMe: c.revealThem, revealThem: c.revealMe, messages: c.messages.map((m) => ({ ...m, side: m.side === "me" ? "them" : "me" })) } : null;
+      return c ? { connId: c.id, claimed: !!c.claimed, blocked: c.blocked, revealMe: c.revealThem, revealThem: c.revealMe, messages: c.messages.map((m) => ({ ...m, side: m.side === "me" ? "them" : "me" })) } : null;
     }
     const g = guestClient(code);
     if (!g) return null;
@@ -792,7 +871,7 @@ export const guest = {
     ]);
     if (!conn) return null;
     return {
-      connId: conn.id, blocked: conn.blocked,
+      connId: conn.id, blocked: conn.blocked, claimed: !!conn.guest_user,
       revealMe: conn.reveal_guest, revealThem: conn.reveal_host,
       messages: (msgs ?? []).map((m) => ({
         id: m.id, side: m.from_host ? "them" : "me",
@@ -813,6 +892,23 @@ export const guest = {
     const { error } = await g.from("messages")
       .insert({ xid_id: xidId, conn_id: connId, from_host: false, body: text });
     if (error) throw new Error(friendly(error));
+  },
+
+  /* Ties this conversation to an account so it survives a change of device.
+     Runs on the device that still holds the token — that token is the only
+     proof of ownership, so the claim has to happen while it's in hand. */
+  async claim(code) {
+    if (!LIVE) {
+      const x = memory().xids.find((v) => v.code === code);
+      const c = x?.conversations.find((v) => v.id === readToken(code));
+      if (c) c.claimed = true;
+      return true;
+    }
+    const token = readToken(code);
+    if (!token) throw new Error("Nothing to keep on this device.");
+    const { error } = await sb.rpc("claim_connection", { p_token: token });
+    if (error) throw new Error(friendly(error));
+    return true;
   },
 
   async reveal(code, connId) {
@@ -848,5 +944,7 @@ function friendly(error) {
   if (m.includes("QUIET_HOURS")) return "It's outside the hours this pass accepts messages.";
   if (m.includes("MESSAGE_CAP")) return "This pass has reached its message limit.";
   if (m.includes("RATE_LIMIT")) return "Too many messages too quickly. Slow down and try again.";
+  if (m.includes("NOT_SIGNED_IN")) return "Create an account first, then we can keep this for you.";
+  if (m.includes("CLAIM_FAILED")) return "This conversation is already linked to an account.";
   return "Something went wrong. Try again.";
 }
