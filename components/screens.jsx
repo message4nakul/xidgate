@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, auth, clock, countdown, db, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, preset, selectStyle, stampDate, useNarrow, withinHours } from "@/lib/core";
+import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, UNITS, auth, buildTranscript, clock, countdown, customMs, db, downloadTranscript, durToParts, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, planCapLabel, planCapMs, preset, selectStyle, stampDate, useNarrow, withinHours } from "@/lib/core";
 
 /* ------------------------------------------------------------- dashboard -- */
 export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
@@ -90,7 +90,9 @@ export function Issue({ state, go, onIssue }) {
 
   const choose = (p) => {
     setPid(p.id);
-    setCfg({ label: p.label, dur: p.dur, conn: p.conn, msgs: p.msgs, hours: p.hours, type: p.type, oneShot: !!p.oneShot, autoExtend: p.id === "sell" });
+    setCfg({ label: p.label, dur: p.dur, ...durToParts(p.dur),
+      conn: p.conn, msgs: p.msgs, hours: p.hours, type: p.type,
+      oneShot: !!p.oneShot, autoExtend: p.id === "sell" });
     setAdv(p.id === "custom");
   };
 
@@ -146,23 +148,71 @@ export function Issue({ state, go, onIssue }) {
               style={{ ...selectStyle, backgroundImage: "none", cursor: "text" }} />
           </Field>
 
-          <Field label="Ends after" hint={state.plan === "free" ? "Free passes run up to 7 days. Pro goes to 30." : "When this runs out, the conversation is deleted from both sides."}>
-            <select value={cfg.dur} onChange={(e) => setCfg((c) => ({ ...c, dur: e.target.value }))} style={selectStyle}>
-              {durOptions.map((d) => <option key={d} value={d}>{DUR_LABEL[d]}</option>)}
-            </select>
+          <Field label="Ends after"
+            hint={`Type any length. ${state.plan === "free" ? "Free passes run up to 7 days" : "Pro passes run up to 12 months"} — longer than that is capped. There's no never-expires option: a pass that never ends is a phone number with extra steps.`}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="number" min="1" step="1" value={cfg.durN}
+                onChange={(e) => setCfg((c) => ({ ...c, durN: e.target.value }))}
+                style={{ ...selectStyle, backgroundImage: "none", cursor: "text", width: 110 }} />
+              <select value={cfg.durUnit} onChange={(e) => setCfg((c) => ({ ...c, durUnit: e.target.value }))}
+                style={{ ...selectStyle, flex: 1 }}>
+                {UNITS.map((u) => <option key={u.v} value={u.v}>{u.label}</option>)}
+              </select>
+            </div>
+            {(() => {
+              const want = customMs(cfg.durN, cfg.durUnit);
+              const cap = planCapMs(state.plan);
+              const ends = new Date(Date.now() + Math.min(want, cap));
+              return (
+                <div style={{ marginTop: 7, fontFamily: MONO, fontSize: 11, color: want > cap ? T.amber : T.mute }}>
+                  {want > cap
+                    ? `Capped at ${planCapLabel(state.plan)} on your plan — ends ${stampDate(ends)}`
+                    : `Ends ${stampDate(ends)}`}
+                </div>
+              );
+            })()}
           </Field>
 
           <Field label="How many people"
-            hint={cfg.oneShot
-              ? "The link stops working the moment they join — even if it gets forwarded. You can let someone else in later if you need to."
-              : cfg.type === "group"
-                ? "Everyone lands in one shared room."
-                : "Each person gets their own private thread. They can't see each other."}>
-            <select value={peopleValue(cfg)}
-              onChange={(e) => { const o = peopleOption(e.target.value); setCfg((c) => ({ ...c, conn: o.conn, oneShot: o.oneShot })); }}
-              style={selectStyle}>
-              {PEOPLE.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
-            </select>
+            hint={cfg.conn === null && cfg.oneShot
+              ? "Closes the moment they join — even if the link gets forwarded. You can let someone else in later."
+              : cfg.conn === null
+                ? "Anyone holding the link can start a thread."
+                : cfg.type === "group"
+                  ? "Everyone lands in one shared room."
+                  : "Each person gets their own private thread. They can't see each other."}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="number" min="1" step="1" placeholder="—"
+                value={cfg.conn === null ? "" : cfg.conn}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") { setCfg((c) => ({ ...c, conn: null, oneShot: false })); return; }
+                  const n = Math.max(1, Math.floor(Number(raw) || 1));
+                  /* Typing 1 stores the latch, not a hard cap of one. A cap can
+                     never be reopened; the latch can. Same behaviour for the
+                     guest, but the host keeps a way back in. */
+                  setCfg((c) => ({ ...c, conn: n === 1 ? null : n, oneShot: n === 1 }));
+                }}
+                style={{ ...selectStyle, backgroundImage: "none", cursor: "text", width: 110 }} />
+              <button type="button"
+                onClick={() => setCfg((c) => ({ ...c, conn: null, oneShot: false }))}
+                style={{
+                  padding: "10px 13px", borderRadius: 8, cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: 600,
+                  borderWidth: 1, borderStyle: "solid",
+                  borderColor: cfg.conn === null && !cfg.oneShot ? T.signal : T.rule,
+                  background: cfg.conn === null && !cfg.oneShot ? T.signalWash : T.card,
+                  color: cfg.conn === null && !cfg.oneShot ? T.signalDeep : T.mute,
+                }}>
+                No limit
+              </button>
+            </div>
+            {cfg.conn !== null && cfg.conn > 1 && (
+              <div style={{ marginTop: 9 }}>
+                <Toggle on={cfg.oneShot} onChange={(v) => setCfg((c) => ({ ...c, oneShot: v }))}
+                  label="Close as soon as the first person joins"
+                  sub={`You've allowed ${cfg.conn}, but the door shuts after the first one through. Useful when the link might get forwarded.`} />
+              </div>
+            )}
           </Field>
 
           <Field label="When they can message" hint={cfg.hours === "any" ? undefined : "Outside these hours they see a note telling them when you reopen. Nothing gets through."}>
@@ -303,6 +353,10 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare }) {
           border: `1px solid ${asGuest ? T.signal : T.rule}`, background: asGuest ? T.signalWash : T.card,
           color: asGuest ? T.signalDeep : T.mute, fontFamily: SANS, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
         }}><Ico.Eye size={14} />{asGuest ? "Their view" : "Your view"}</button>
+        {live && cur && cur.messages.length > 0 && (
+          <Btn size="sm" kind="quiet" icon={Ico.Ledger} title="Save your own copy before this ends"
+            onClick={() => downloadTranscript(x, cur, "host")}>{narrow ? "Save" : "Save a copy"}</Btn>
+        )}
         {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={() => onKill(x)}>Kill</Btn>}
       </div>
 
@@ -488,8 +542,22 @@ export function Banner({ x, asGuest, live, open, cur }) {
    per dead pass, which is also why this costs nothing to keep forever.       */
 export function Ledger({ state }) {
   const narrow = useNarrow();
-  const rs = [...state.receipts].sort((a, b) => b.ended - a.ended);
-  const total = rs.reduce((n, r) => n + r.destroyed, 0);
+  const [q, setQ] = useState("");
+  const all = [...state.receipts].sort((a, b) => b.ended - a.ended);
+  const total = all.reduce((n, r) => n + r.destroyed, 0);
+
+  /* Receipts hold no message content, so search runs over what does exist:
+     the label you gave the pass, its code, and why it ended. Searching the
+     conversations themselves would require having kept them. */
+  const needle = q.trim().toLowerCase();
+  const rs = needle
+    ? all.filter((r) =>
+        r.label.toLowerCase().includes(needle) ||
+        r.code.toLowerCase().includes(needle) ||
+        r.reason.toLowerCase().includes(needle) ||
+        stampDate(r.ended).toLowerCase().includes(needle))
+    : all;
+
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 820, margin: "0 auto" }}>
       <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>Destruction ledger</h1>
@@ -497,8 +565,8 @@ export function Ledger({ state }) {
         A receipt for every pass that ended. We keep the counts and the timestamps so you can prove it happened. The messages themselves are gone — we can't show them to you, or to anyone else.
       </p>
 
-      <div style={{ display: "flex", gap: 26, padding: "18px 22px", background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, marginBottom: 24, flexWrap: "wrap" }}>
-        {[["Passes destroyed", rs.length], ["Messages erased", total], ["Kept on our servers", 0]].map(([k, v]) => (
+      <div style={{ display: "flex", gap: 26, padding: "18px 22px", background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, marginBottom: 18, flexWrap: "wrap" }}>
+        {[["Passes destroyed", all.length], ["Messages erased", total], ["Kept on our servers", 0]].map(([k, v]) => (
           <div key={k}>
             <div style={{ fontFamily: MONO, fontSize: 27, fontWeight: 500, color: T.ink, letterSpacing: "-0.02em" }}>{v}</div>
             <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: T.mute, marginTop: 3 }}>{k}</div>
@@ -506,9 +574,30 @@ export function Ledger({ state }) {
         ))}
       </div>
 
+      {all.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.rule}`, background: T.card, marginBottom: 16, maxWidth: 420 }}>
+          <Ico.Search size={15} style={{ color: T.faint }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name, code, date or reason"
+            style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: SANS, fontSize: 13.5, color: T.ink, minWidth: 0 }} />
+          {q && (
+            <button onClick={() => setQ("")} aria-label="Clear search"
+              style={{ border: "none", background: "none", color: T.faint, cursor: "pointer", fontSize: 17, lineHeight: 1 }}>×</button>
+          )}
+        </div>
+      )}
+
+      {needle && (
+        <div style={{ fontFamily: MONO, fontSize: 11, color: T.mute, marginBottom: 12 }}>
+          {rs.length} of {all.length} receipts
+        </div>
+      )}
+
       {rs.length === 0 ? (
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 12, padding: "44px 24px", textAlign: "center", color: T.mute, fontSize: 13.5, background: T.card }}>
-          Nothing destroyed yet. Receipts land here when a pass ends.
+          {needle
+            ? <>Nothing matches “{q}”. Receipts only hold the pass name, code, date and reason — not the messages.</>
+            : "Nothing destroyed yet. Receipts land here when a pass ends."}
         </div>
       ) : (
         <div style={{ display: "grid", gap: 9 }}>
@@ -616,7 +705,7 @@ export function KillConfirm({ target, onCancel, onConfirm }) {
         {msgs} {msgs === 1 ? "message" : "messages"} across {people} {people === 1 ? "person" : "people"} will be deleted immediately — on their side too. The link stops working. There's no undo and no archive.
       </p>
       <p style={{ margin: "0 0 20px", fontSize: 13, color: T.mute, lineHeight: 1.6 }}>
-        You'll get a receipt in your ledger.
+        You'll get a receipt in your ledger. If you need the conversation itself, close this and use <strong style={{ fontWeight: 650, color: T.ink }}>Save a copy</strong> first — afterwards nobody can recover it.
       </p>
       <div style={{ display: "flex", gap: 9 }}>
         <Btn kind="quiet" style={{ flex: 1 }} onClick={onCancel}>Keep it</Btn>

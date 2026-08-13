@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Wordmark } from "@/components/screens";
-import { Btn, Chip, Field, Ico, MONO, SANS, T, auth, clock, countdown, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
+import { Btn, Chip, Field, Ico, MONO, SANS, T, auth, clock, countdown, downloadTranscript, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
 
 /* =============================================================================
    This is the page a stranger lands on, and it is the most important screen in
@@ -228,6 +228,14 @@ export default function GuestPage() {
               deletes itself in {cd.text}
             </div>
           </div>
+          {thread.messages.length > 0 && (
+            <Btn size="sm" kind="quiet" icon={Ico.Ledger} title="Save your own copy before this ends"
+              onClick={() => downloadTranscript(
+                { label: xid.label, code, createdAt: Date.now(), expiresAt: new Date(xid.expires_at).getTime() },
+                { guest: "Them", messages: thread.messages }, "guest")}>
+              {narrow ? "Save" : "Save a copy"}
+            </Btn>
+          )}
           <Wordmark />
         </header>
 
