@@ -126,6 +126,7 @@ export default function HostApp() {
         <main style={{ flex: 1, overflowY: view === "chat" ? "hidden" : "auto", minWidth: 0, minHeight: 0 }}>
           {view === "passes" && (
             <Dashboard state={state} go={go} onShare={setShare}
+              onReopen={act((x) => db.unseal(x.id), "Reopened. One more person can join.")}
               onKill={(x) => setKill(x)}
               onKillAll={() => setKill(state.xids.filter((x) => x.status === "active"))} />
           )}
