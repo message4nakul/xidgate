@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Wordmark } from "@/components/screens";
-import { Btn, Chip, Field, Ico, MONO, SANS, T, clock, countdown, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
+import { Btn, Chip, Field, Ico, MONO, SANS, T, auth, clock, countdown, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
 
 /* =============================================================================
    This is the page a stranger lands on, and it is the most important screen in
@@ -20,6 +20,13 @@ export default function GuestPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [keepOpen, setKeepOpen] = useState(false);
+  const [keepDone, setKeepDone] = useState(false);
+  const [keepDismissed, setKeepDismissed] = useState(false);
+  const [kEmail, setKEmail] = useState("");
+  const [kPw, setKPw] = useState("");
+  const [kErr, setKErr] = useState(null);
+  const [kBusy, setKBusy] = useState(false);
   const [, setTick] = useState(0);
   const endRef = useRef(null);
   const narrow = useNarrow();
@@ -54,6 +61,32 @@ export default function GuestPage() {
     setDraft(""); setErr(null);
     try { await guest.send(code, xid.id, thread.connId, text); await load(); }
     catch (e) { setErr(e.message); setDraft(text); }
+  };
+
+  /* Offered only after they've actually said something. Asking before the first
+     message is asking a stranger to sign up for a product they haven't used
+     yet — which is the whole thing this design avoids. */
+  const keepIt = async () => {
+    setKErr(null);
+    if (!kEmail.trim() || kPw.length < 6) {
+      setKErr("Enter your email and a password of at least 6 characters.");
+      return;
+    }
+    setKBusy(true);
+    const res = await auth.signUp(kEmail.trim(), kPw);
+    if (!res.ok) {
+      setKErr(res.error || "Couldn't create that account.");
+      setKBusy(false);
+      return;
+    }
+    try {
+      await guest.claim(code);
+      setKeepDone(true);
+      setKeepOpen(false);
+    } catch (e) {
+      setKErr(e.message);
+    }
+    setKBusy(false);
   };
 
   if (xid === undefined) return <Shell><Center><span style={{ fontFamily: MONO, fontSize: 12, color: T.faint }}>Opening…</span></Center></Shell>;
@@ -225,6 +258,51 @@ export default function GuestPage() {
           })}
           <div ref={endRef} />
         </div>
+
+        {/* Continuity offer — appears only once they've sent something. */}
+        {!thread.blocked && !thread.claimed && !keepDone && !keepDismissed &&
+          thread.messages.some((m) => m.side === "me") && (
+          <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: T.signalWash }}>
+            {!keepOpen ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12.5, color: T.signalDeep, flex: 1, minWidth: 190, lineHeight: 1.5 }}>
+                  Want this conversation to follow you to another device? Create an account — it takes about ten seconds.
+                </span>
+                <Btn size="sm" onClick={() => setKeepOpen(true)}>Keep it</Btn>
+                <button onClick={() => setKeepDismissed(true)}
+                  style={{ border: "none", background: "none", color: T.mute, fontFamily: SANS, fontSize: 12.5, cursor: "pointer" }}>
+                  No thanks
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 12.5, color: T.signalDeep, lineHeight: 1.5, marginBottom: 10 }}>
+                  <strong style={{ fontWeight: 650 }}>This only saves your side.</strong> They still can't see your email, and the pass still ends when it ends.
+                </div>
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
+                  <input type="email" value={kEmail} onChange={(e) => setKEmail(e.target.value)} placeholder="you@example.com"
+                    autoComplete="email"
+                    style={{ ...selectStyle, backgroundImage: "none", cursor: "text", flex: "1 1 180px", padding: "9px 11px", fontSize: 15 }} />
+                  <input type="password" value={kPw} onChange={(e) => setKPw(e.target.value)} placeholder="Password"
+                    autoComplete="new-password" onKeyDown={(e) => e.key === "Enter" && keepIt()}
+                    style={{ ...selectStyle, backgroundImage: "none", cursor: "text", flex: "1 1 140px", padding: "9px 11px", fontSize: 15 }} />
+                  <Btn size="sm" onClick={keepIt} disabled={kBusy}>{kBusy ? "Saving…" : "Save"}</Btn>
+                  <Btn size="sm" kind="ghost" onClick={() => { setKeepOpen(false); setKErr(null); }}>Cancel</Btn>
+                </div>
+                {kErr && <div role="alert" style={{ fontSize: 12, color: T.stamp, lineHeight: 1.45 }}>{kErr}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {keepDone && (
+          <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: T.liveWash, display: "flex", alignItems: "center", gap: 9 }}>
+            <Ico.Check size={16} style={{ color: T.live }} />
+            <span style={{ fontSize: 12.5, color: T.live, lineHeight: 1.5 }}>
+              Saved. Sign in with that email on any device and this conversation will be here — until the pass ends.
+            </span>
+          </div>
+        )}
 
         {!thread.blocked && (
           <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: both ? T.liveWash : "#FAFBFC" }}>
