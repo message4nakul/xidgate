@@ -837,14 +837,42 @@ export const db = {
      per open chat and closed the moment you leave. Never subscribe globally. */
   watch(xidId, onChange) {
     if (!LIVE) return () => {};
-    const ch = sb.channel(`x:${xidId}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `xid_id=eq.${xidId}` },
-        onChange)
-      .subscribe();
-    return () => sb.removeChannel(ch);
+    return poll(onChange);
   },
 };
+
+/* Live updates are polled, not pushed.
+
+   Realtime was the obvious choice and it quietly did not work. A guest is
+   identified by the x-xid-token header, and headers travel on HTTP requests —
+   not on the realtime WebSocket. So the subscription authenticated as an
+   anonymous visitor, row-level security found no matching connection, and the
+   server correctly delivered nothing. No error, no events, and the guest had to
+   reload to see a reply.
+
+   Polling is also the better fit here. It survives a phone suspending the tab,
+   it needs no reconnect logic, and it removes the concurrent-WebSocket ceiling
+   that was the first thing due to break at scale. Four seconds is well inside
+   what a conversation like this needs. */
+const POLL_MS = 4000;
+
+function poll(onTick) {
+  if (typeof document === "undefined") return () => {};
+  let stopped = false;
+  const fire = () => { if (!stopped && document.visibilityState === "visible") onTick(); };
+  const id = setInterval(fire, POLL_MS);
+  /* Coming back to a backgrounded tab should feel instant rather than wait out
+     the interval — this is the common case on a phone. */
+  const onVisible = () => { if (document.visibilityState === "visible") onTick(); };
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+  return () => {
+    stopped = true;
+    clearInterval(id);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", onVisible);
+  };
+}
 
 /* ----------------------------------------------------------------- guest -- */
 export const guest = {
@@ -959,13 +987,7 @@ export const guest = {
 
   watch(code, xidId, cb) {
     if (!LIVE) return () => {};
-    const g = guestClient(code);
-    if (!g) return () => {};
-    const ch = g.channel(`g:${xidId}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages", filter: `xid_id=eq.${xidId}` }, cb)
-      .subscribe();
-    return () => g.removeChannel(ch);
+    return poll(cb);
   },
 };
 

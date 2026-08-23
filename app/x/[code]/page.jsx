@@ -43,10 +43,13 @@ export default function GuestPage() {
   useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [thread?.messages.length]);
 
+  /* Depend on the id, not the objects. lookup() and thread() return fresh
+     objects every poll, so depending on them would tear the timer down and
+     rebuild it on every tick. */
   useEffect(() => {
-    if (!xid || !thread) return;
+    if (!xid?.id || !thread) return;
     return guest.watch(code, xid.id, load);
-  }, [xid, thread, code, load]);
+  }, [xid?.id, !!thread, code, load]);
 
   const join = async () => {
     setErr(null); setBusy(true);
