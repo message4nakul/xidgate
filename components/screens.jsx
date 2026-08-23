@@ -128,7 +128,7 @@ export function Issue({ state, go, onIssue }) {
 
   const previewXid = {
     code: "•••••••", label: cfg.label || "Untitled pass", type: cfg.type,
-    createdAt: Date.now(), expiresAt: expiryFrom(cfg.dur), maxConn: cfg.conn,
+    createdAt: Date.now(), expiresAt: Date.now() + Math.min(customMs(cfg.durN, cfg.durUnit), planCapMs(state.plan)), maxConn: cfg.conn,
     hours: cfg.hours, oneShot: cfg.oneShot, status: "active", unread: 0, conversations: [],
   };
   const durOptions = Object.keys(DUR).filter((d) => state.plan === "pro" || DUR[d] <= DUR[PLAN.free.maxDur]);
@@ -183,7 +183,7 @@ export function Issue({ state, go, onIssue }) {
                   : "Each person gets their own private thread. They can't see each other."}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input type="number" min="1" step="1" placeholder="—"
-                value={cfg.conn === null ? "" : cfg.conn}
+                value={cfg.oneShot && cfg.conn === null ? 1 : cfg.conn === null ? "" : cfg.conn}
                 onChange={(e) => {
                   const raw = e.target.value;
                   if (raw === "") { setCfg((c) => ({ ...c, conn: null, oneShot: false })); return; }

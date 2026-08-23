@@ -882,8 +882,14 @@ export const guest = {
       const x = memory().xids.find((v) => v.code === code);
       return x ? { id: x.id, code: x.code, label: x.label, kind: x.type, hours: x.hours, expires_at: new Date(x.expiresAt).toISOString(), status: x.status, sealed: !!x.sealed } : null;
     }
-    const { data } = await sb.from("xid_public").select("*").eq("code", code).maybeSingle();
-    return data ?? null;
+    /* Through a function, not the view. Someone holding a shared link has no
+       session and no guest token, so no row-level policy can match them — the
+       view returned nothing and every shared pass rendered as deactivated.
+       Widening the policy instead would let anyone list every live pass. */
+    const { data, error } = await sb.rpc("xid_by_code", { p_code: code });
+    if (error) return null;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row ?? null;
   },
 
   async join(code, name) {
