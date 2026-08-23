@@ -40,26 +40,26 @@ export default function Landing() {
           <div>
             <div style={{ marginBottom: 18 }}><Chip tone="signal">Indian Patent No. 550231</Chip></div>
             <h1 style={{ margin: "0 0 18px", fontFamily: SANS, fontSize: narrow ? 36 : 54, fontWeight: 700, letterSpacing: "-0.045em", lineHeight: 1.02, color: T.ink }}>
-              Share a pass,<br />not your number.
+              Every conversation<br />deserves its own identity.
             </h1>
             <p style={{ margin: "0 0 12px", fontSize: narrow ? 16 : 18.5, lineHeight: 1.55, color: T.mute, maxWidth: 480 }}>
-              Give anyone a way to reach you that ends on its own. You set how long it lasts, how many people can use it, and when the conversation is over.
+              Your number is one permanent channel for everyone — family, clients, a stranger buying your bike. XID gives each connection its own, with its own rules, its own hours, and its own ending.
             </p>
             <p style={{ margin: "0 0 28px", fontSize: narrow ? 16 : 18.5, lineHeight: 1.55, color: T.ink, maxWidth: 480, fontWeight: 500 }}>
-              When it ends, every message is deleted. On both sides.
+              They need no app and no account. They tap your link and start talking.
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <Link href="/app" style={{ textDecoration: "none" }}>
-                <Btn size="lg" icon={Ico.Arrow}>Issue your first pass</Btn>
+                <Btn size="lg" icon={Ico.Arrow}>Create your first XID</Btn>
               </Link>
-              <span style={{ fontSize: 13, color: T.faint }}>Free · no card</span>
+              <span style={{ fontSize: 13, color: T.faint }}>Free · they don’t sign up for anything</span>
             </div>
           </div>
 
           <div>
             <Pass x={demo} onOpen={() => {}} onShare={() => {}} onKill={() => {}} />
             <p style={{ margin: "14px 4px 0", fontFamily: MONO, fontSize: 11, color: T.faint, lineHeight: 1.6 }}>
-              A live pass. The countdown above is real — when it reaches zero, that conversation is gone.
+              A live XID. That countdown is real — when it reaches zero, the conversation closes.
             </p>
           </div>
         </div>
@@ -69,13 +69,13 @@ export default function Landing() {
       <section style={{ background: T.ink, color: "#fff", padding: narrow ? "48px 18px" : "72px 32px" }}>
         <div style={{ maxWidth: 800, margin: "0 auto" }}>
           <h2 style={{ margin: "0 0 20px", fontFamily: SANS, fontSize: narrow ? 26 : 34, fontWeight: 700, letterSpacing: "-0.035em", lineHeight: 1.14 }}>
-            You can't un-share a phone number.
+            One identity for everyone you'll ever meet.
           </h2>
           <p style={{ margin: "0 0 16px", fontSize: narrow ? 15.5 : 17, lineHeight: 1.65, color: "rgba(255,255,255,.66)" }}>
-            Sell one bike and the calls never stop. Ask one contractor for a quote and three more have your number by evening. Match with one person and they can reach you forever, whether the date went well or not.
+            Sell one bike and the calls never stop. Ask one contractor for a quote and three more have your number by evening. Your number treats a stranger and your family exactly the same way — because it cannot tell them apart.
           </p>
           <p style={{ margin: 0, fontSize: narrow ? 15.5 : 17, lineHeight: 1.65, color: "rgba(255,255,255,.66)" }}>
-            Blocking is whack-a-mole. Unsubscribing is a promise nobody keeps. Once someone has your permanent identity, the relationship is theirs to end, not yours.
+            That is not a privacy problem. It is a design problem, and everyone has it. A connection should carry its own terms — who it is for, how long it lasts, when it is over.
           </p>
         </div>
       </section>
@@ -83,16 +83,16 @@ export default function Landing() {
       {/* --------------------------------------------------------- how it works */}
       <section style={{ padding: narrow ? "48px 18px" : "72px 32px", maxWidth: 1000, margin: "0 auto" }}>
         <h2 style={{ margin: "0 0 8px", fontFamily: SANS, fontSize: narrow ? 26 : 32, fontWeight: 700, letterSpacing: "-0.035em", color: T.ink }}>
-          Three steps, and the last one happens by itself
+          Three steps, and the last one takes care of itself
         </h2>
         <p style={{ margin: "0 0 34px", fontSize: 15, color: T.mute, maxWidth: 520, lineHeight: 1.55 }}>
-          The whole point is that you don't have to remember to end it.
+          You decide the terms once. After that it looks after itself.
         </p>
         <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 14, gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)" }}>
           {[
-            ["Issue a pass", "Pick why you need it — selling something, meeting someone, getting a quote. The rules are set for you."],
-            ["Share the link or QR", "Put it where your number would have gone. Whoever opens it can message you. They don't sign up for anything."],
-            ["It ends itself", "At the time you chose, or the moment you tap kill. The messages are deleted and the link stops working."],
+            ["Create an XID", "Pick why you need it. The terms are set for you, and you can change any of them."],
+            ["Share the link or QR", "Put it where your number would have gone. Whoever opens it can message you — no app, no account, nothing to install."],
+            ["It completes itself", "At the time you chose, or the moment you end it. The conversation closes and the link stops working."],
           ].map(([title, body], i) => (
             <li key={title} style={{ background: T.card, border: `1px solid ${T.rule}`, borderRadius: 12, padding: "20px 20px 22px" }}>
               <div style={{ fontFamily: MONO, fontSize: 11, color: T.signal, marginBottom: 11, letterSpacing: ".1em" }}>
@@ -112,9 +112,9 @@ export default function Landing() {
         </h2>
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)", marginBottom: 30 }}>
           {[
-            ["Free", "₹0", "Three passes at a time, up to a week each. No card needed.", false],
-            ["Day pass", "₹49", "Twenty-four hours of unlimited passes. For the weekend you're selling a car.", false],
-            ["Pro", "₹99", "Per month. Unlimited passes, month-long durations, group rooms.", true],
+            ["Free", "₹0", "Three XIDs at a time, up to a week each. No card needed.", false],
+            ["Day pass", "₹49", "Twenty-four hours of unlimited XIDs. For the weekend you're selling a car.", false],
+            ["Pro", "₹99", "Per month. Unlimited XIDs, long durations, group rooms.", true],
           ].map(([name, price, note, hero]) => (
             <div key={name} style={{
               background: T.card, borderRadius: 12, padding: "22px 20px",
@@ -128,7 +128,7 @@ export default function Landing() {
           ))}
         </div>
         <Link href="/app" style={{ textDecoration: "none" }}>
-          <Btn size="lg" icon={Ico.Arrow}>Issue your first pass</Btn>
+          <Btn size="lg" icon={Ico.Arrow}>Create your first XID</Btn>
         </Link>
       </section>
 

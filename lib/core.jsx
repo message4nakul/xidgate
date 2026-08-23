@@ -300,7 +300,7 @@ export const PRESETS = [
   { id: "quote", title: "Getting a quote", blurb: "Contractors reach you during work hours only.", dur: "3d", conn: 5, msgs: null, hours: "9-18", type: "individual", label: "Quote request" },
   { id: "work", title: "A client or job", blurb: "A month of access, on your schedule.", dur: "30d", conn: 3, msgs: null, hours: "9-18", type: "individual", label: "Client channel" },
   { id: "group", title: "A group", blurb: "Everyone in one room. No numbers exchanged.", dur: "7d", conn: 20, msgs: null, hours: "any", type: "group", label: "Group room" },
-  { id: "custom", title: "Something else", blurb: "Set every rule yourself.", dur: "24h", conn: null, msgs: null, hours: "any", type: "individual", label: "Untitled pass" },
+  { id: "custom", title: "Something else", blurb: "Set every rule yourself.", dur: "24h", conn: null, msgs: null, hours: "any", type: "individual", label: "Untitled XID" },
 ];
 export const preset = (id) => PRESETS.find((p) => p.id === id) || PRESETS[5];
 
@@ -410,9 +410,9 @@ export function Chip({ tone = "mute", children }) {
 }
 
 /* --------------------------------------------------- THE PASS (signature) -- */
-/* Every XID is a physical-feeling access pass: a perforated stub carrying the
+/* Every XID renders as a physical-feeling card: a perforated stub carrying the
    code, a countdown as the hero number, and a drain bar. Killing it stamps
-   VOID across the face. The metaphor is the product.                        */
+   CLOSED across the face. The metaphor is the product.                        */
 export function Pass({ x, onOpen, onShare, onKill, onReopen, compact = false }) {
   const live = x.status === "active";
   const left = x.expiresAt - Date.now();
@@ -482,7 +482,7 @@ export function Pass({ x, onOpen, onShare, onKill, onReopen, compact = false }) 
             {live && x.sealed && onReopen && (
               <Btn size="sm" kind="quiet" icon={Ico.Users} onClick={onReopen}>Let someone else in</Btn>
             )}
-            {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={onKill}>Kill</Btn>}
+            {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={onKill}>End</Btn>}
           </div>
         )}
       </div>
@@ -492,7 +492,7 @@ export function Pass({ x, onOpen, onShare, onKill, onReopen, compact = false }) 
           position: "absolute", right: 18, top: "50%", transform: "translateY(-50%) rotate(-13deg)",
           fontFamily: MONO, fontSize: 26, letterSpacing: ".18em", color: "rgba(192,49,28,.22)",
           border: "3px solid rgba(192,49,28,.22)", borderRadius: 6, padding: "3px 10px", fontWeight: 600, pointerEvents: "none",
-        }}>VOID</span>
+        }}>CLOSED</span>
       )}
     </article>
   );
@@ -547,8 +547,8 @@ export const seed = () => {
       },
     ],
     receipts: [
-      { id: uid(), code: newCode(), label: "Sofa · Facebook Marketplace", issued: now - 12 * 864e5, ended: now - 9 * 864e5, reason: "Expired on schedule", connections: 4, destroyed: 31 },
-      { id: uid(), code: newCode(), label: "Coffee, Saturday", issued: now - 21 * 864e5, ended: now - 20 * 864e5, reason: "Killed by you", connections: 1, destroyed: 12 },
+      { id: uid(), code: newCode(), label: "Sofa · Facebook Marketplace", issued: now - 12 * 864e5, ended: now - 9 * 864e5, reason: "Ended on schedule", connections: 4, destroyed: 31 },
+      { id: uid(), code: newCode(), label: "Coffee, Saturday", issued: now - 21 * 864e5, ended: now - 20 * 864e5, reason: "Ended by you", connections: 1, destroyed: 12 },
     ],
   };
 };
@@ -774,7 +774,7 @@ export const db = {
       for (const x of m.xids) {
         if (!ids.has(x.id)) continue;
         m.receipts.push({
-          id: uid(), code: x.code, label: x.label, reason: "Killed by you",
+          id: uid(), code: x.code, label: x.label, reason: "Ended by you",
           issued: x.createdAt, ended: Date.now(),
           connections: x.conversations.length,
           destroyed: x.conversations.reduce((n, c) => n + c.messages.length, 0),
@@ -821,31 +821,6 @@ export const db = {
       return;
     }
     const { error } = await sb.from("connections").update({ keep_host: on }).eq("id", connId);
-    if (error) throw new Error(friendly(error));
-  },
-
-  async reveal(xidId, connId, who) {
-    if (!LIVE) {
-      const x = memory().xids.find((v) => v.id === xidId);
-      const c = x?.conversations.find((v) => v.id === connId);
-      if (c) c[who === "me" ? "revealMe" : "revealThem"] = true;
-      return;
-    }
-    await sb.from("connections")
-      .update(who === "me" ? { reveal_host: true } : { reveal_guest: true })
-      .eq("id", connId);
-  },
-
-  /* Lets a host readmit someone after a one-shot pass has closed. Without it a
-     guest who loses their token on a sealed pass is locked out for good and
-     neither side can fix it. */
-  async unseal(xidId) {
-    if (!LIVE) {
-      const x = memory().xids.find((v) => v.id === xidId);
-      if (x) x.sealed = false;
-      return;
-    }
-    const { error } = await sb.rpc("unseal_xid", { p_id: xidId });
     if (error) throw new Error(friendly(error));
   },
 
@@ -971,22 +946,6 @@ export const guest = {
     return true;
   },
 
-  /* Goes through a function, not a table update. Guests have no UPDATE policy on
-     connections by design: row-level security cannot restrict which columns a
-     write touches, and a guest must never be able to clear their own 'blocked'
-     flag. The old table update returned 200 and changed nothing, so the
-     handshake looked accepted to the guest and never reached the host. */
-  async reveal(code, xidId) {
-    if (!LIVE) {
-      const x = memory().xids.find((v) => v.code === code);
-      const c = x?.conversations.find((v) => v.id === readToken(code));
-      if (c) c.revealThem = true;
-      return;
-    }
-    const { error } = await guestClient(code).rpc("guest_set_reveal", { p_xid: xidId });
-    if (error) throw new Error(friendly(error));
-  },
-
   async setKeep(code, xidId, on) {
     if (!LIVE) {
       const x = memory().xids.find((v) => v.code === code);
@@ -1010,20 +969,20 @@ export const guest = {
   },
 };
 
-/* Lets either side keep their own record before a pass ends. This is the honest
+/* Lets either side keep their own record before an XID ends. This is the honest
    answer to "I need this conversation later": the copy lives with the person who
    asked for it, and the server still keeps nothing. */
 export function buildTranscript(x, conv, whoAmI) {
   const when = (ts) => new Date(ts).toLocaleString();
   const lines = [
     `XIDgate conversation`,
-    `Pass:    ${x.label}  (${x.code})`,
+    `XID:     ${x.label}  (${x.code})`,
     `Opened:  ${when(x.createdAt)}`,
     `Ends:    ${when(x.expiresAt)}`,
     `With:    ${conv.guest}`,
     `Saved:   ${when(Date.now())} by ${whoAmI}`,
     ``,
-    `This is a personal copy. XIDgate deletes the original when the pass ends.`,
+    `This is a personal copy. XIDgate clears the original when the XID ends.`,
     `─`.repeat(60),
     ``,
   ];
@@ -1052,11 +1011,11 @@ export function downloadTranscript(x, conv, whoAmI) {
    instead of showing a stack trace. Keep these in sync with schema.sql. */
 function friendly(error) {
   const m = String(error?.message ?? error);
-  if (m.includes("XID_CLOSED")) return "This pass has ended. Nothing here can be reopened.";
-  if (m.includes("XID_FULL")) return "This pass is closed to new people. Whoever it was meant for has already joined.";
-  if (m.includes("CONNECTION_BLOCKED")) return "You can't send messages on this pass.";
-  if (m.includes("QUIET_HOURS")) return "It's outside the hours this pass accepts messages.";
-  if (m.includes("MESSAGE_CAP")) return "This pass has reached its message limit.";
+  if (m.includes("XID_CLOSED")) return "This XID has ended. Nothing here can be reopened.";
+  if (m.includes("XID_FULL")) return "This XID is closed to new people. Whoever it was meant for has already joined.";
+  if (m.includes("CONNECTION_BLOCKED")) return "You can't send messages on this XID.";
+  if (m.includes("QUIET_HOURS")) return "It's outside the hours this XID accepts messages.";
+  if (m.includes("MESSAGE_CAP")) return "This XID has reached its message limit.";
   if (m.includes("RATE_LIMIT")) return "Too many messages too quickly. Slow down and try again.";
   if (m.includes("NOT_A_GUEST")) return "This conversation is no longer open to you.";
   if (m.includes("NOT_SIGNED_IN")) return "Create an account first, then we can keep this for you.";

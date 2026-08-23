@@ -103,19 +103,19 @@ export default function GuestPage() {
               <Ico.Shield size={22} />
             </div>
             <h1 style={{ margin: "0 0 10px", fontFamily: SANS, fontSize: 25, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>
-              This conversation is gone
+              This conversation has ended
             </h1>
             <p style={{ margin: "0 0 8px", fontSize: 14.5, color: T.mute, lineHeight: 1.6 }}>
-              The pass ended, so every message in it was deleted — on both sides. There's no archive and no way to reopen it.
+              The XID reached its end, so the conversation closed on both sides. There's no archive and no way to reopen it.
             </p>
             <p style={{ margin: "0 0 26px", fontSize: 14.5, color: T.mute, lineHeight: 1.6 }}>
               Nobody kept your details either. That was the point.
             </p>
             <Link href="/" style={{ textDecoration: "none" }}>
-              <Btn size="lg" icon={Ico.Arrow}>Get a pass of your own</Btn>
+              <Btn size="lg" icon={Ico.Arrow}>Create your own XID</Btn>
             </Link>
             <p style={{ margin: "16px 0 0", fontSize: 12.5, color: T.faint, lineHeight: 1.55 }}>
-              Free. Share a pass instead of your number next time you sell something, meet someone, or ask for a quote.
+              Free. Give out an XID instead of your number next time you sell something, meet someone, or ask for a quote.
             </p>
           </div>
         </Center>
@@ -134,13 +134,13 @@ export default function GuestPage() {
               <Ico.Ban size={22} />
             </div>
             <h1 style={{ margin: "0 0 10px", fontFamily: SANS, fontSize: 24, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>
-              This pass is closed
+              This XID is closed
             </h1>
             <p style={{ margin: "0 0 24px", fontSize: 14.5, color: T.mute, lineHeight: 1.6 }}>
               It was set to accept one person, and someone has already joined. Even if this link was forwarded to you, nobody else can get in.
             </p>
             <Link href="/" style={{ textDecoration: "none" }}>
-              <Btn size="lg" icon={Ico.Arrow}>Get a pass of your own</Btn>
+              <Btn size="lg" icon={Ico.Arrow}>Create your own XID</Btn>
             </Link>
           </div>
         </Center>
@@ -168,14 +168,14 @@ export default function GuestPage() {
                 {xid.label}
               </h1>
               <p style={{ margin: "0 0 20px", fontSize: 14, color: T.mute, lineHeight: 1.6 }}>
-                Someone gave you this pass so you could message them without either of you sharing a phone number or email.
+                Someone opened a direct line to you. No app, no signup, no numbers exchanged — pick a name and start talking.
               </p>
 
               <ul style={{ margin: "0 0 22px", padding: 0, listStyle: "none", display: "grid", gap: 9 }}>
                 {[
                   ["You don't need an account", "No signup, no app, no password. Pick a name and start typing."],
                   ["They can't see who you are", "Not your number, not your email, not your name unless you type it."],
-                  [`It ends in ${cd.text}`, "When it does, every message is deleted for both of you."],
+                  [`It ends in ${cd.text}`, "When it does, the conversation closes for both of you."],
                   ...(xid.hours !== "any" ? [["Messages only during set hours", hoursMeta(xid.hours).label]] : []),
                 ].map(([k, v]) => (
                   <li key={k} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
@@ -214,7 +214,6 @@ export default function GuestPage() {
   }
 
   /* ------------------------------------------------------------ chat ----- */
-  const both = thread.revealMe && thread.revealThem;
   return (
     <Shell pad={false}>
       <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: T.card, maxWidth: 720, margin: "0 auto", borderLeft: narrow ? "none" : `1px solid ${T.ruleSoft}`, borderRight: narrow ? "none" : `1px solid ${T.ruleSoft}` }}>
@@ -225,7 +224,7 @@ export default function GuestPage() {
               <Chip tone={open ? "live" : "warn"}>{open ? "live" : "quiet hours"}</Chip>
             </div>
             <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.mute, marginTop: 3 }}>
-              deletes itself in {cd.text}
+              ends in {cd.text}
             </div>
           </div>
           {thread.messages.length > 0 && (
@@ -243,7 +242,7 @@ export default function GuestPage() {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "10px 13px", borderRadius: 9, background: T.signalWash, border: "1px solid #DCE2FF", color: T.signalDeep, fontSize: 12.5, lineHeight: 1.55, marginBottom: 16 }}>
             <Ico.Shield size={15} />
             <span>
-              <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. Everything here is deleted in {cd.text}.
+              <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation closes in {cd.text}.
               {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours)}.</>}
             </span>
           </div>
@@ -285,7 +284,7 @@ export default function GuestPage() {
             ) : (
               <div>
                 <div style={{ fontSize: 12.5, color: T.signalDeep, lineHeight: 1.5, marginBottom: 10 }}>
-                  <strong style={{ fontWeight: 650 }}>This only saves your side.</strong> They still can't see your email, and the pass still ends when it ends.
+                  <strong style={{ fontWeight: 650 }}>This only saves your side.</strong> They still can't see your email, and the XID still ends when it ends.
                 </div>
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
                   <input type="email" value={kEmail} onChange={(e) => setKEmail(e.target.value)} placeholder="you@example.com"
@@ -307,7 +306,7 @@ export default function GuestPage() {
           <div style={{ padding: "11px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: T.liveWash, display: "flex", alignItems: "center", gap: 9 }}>
             <Ico.Check size={16} style={{ color: T.live }} />
             <span style={{ fontSize: 12.5, color: T.live, lineHeight: 1.5 }}>
-              Saved. Sign in with that email on any device and this conversation will be here — until the pass ends.
+              Saved. Sign in with that email on any device and this conversation will be here — until the XID ends.
             </span>
           </div>
         )}
@@ -319,7 +318,7 @@ export default function GuestPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live, flexWrap: "wrap" }}>
                 <Ico.Shield size={16} />
                 <span style={{ flex: 1, minWidth: 190 }}>
-                  <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It stays readable after the pass ends.
+                  <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It stays readable after the XID ends.
                 </span>
                 <Btn size="sm" kind="ghost"
                   onClick={async () => { try { await guest.setKeep(code, xid.id, false); await load(); } catch (e) { setErr(e.message); } }}>
@@ -330,10 +329,10 @@ export default function GuestPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12.5, color: T.mute, flex: 1, minWidth: 190 }}>
                   {thread.keepMe
-                    ? "You've asked to keep this. It's still deleted when the pass ends unless they agree too."
+                    ? "You've asked to keep this. It still closes when the XID ends unless they agree too."
                     : thread.keepThem
                       ? "They've asked to keep this past the end date. It's only kept if you agree as well."
-                      : "This is deleted when the pass ends. If you both agree, it can be kept."}
+                      : "This closes when the XID ends. If you both agree, it can be kept."}
                 </span>
                 <Btn size="sm" kind="quiet" icon={Ico.Shield} disabled={thread.keepMe}
                   onClick={async () => { try { await guest.setKeep(code, xid.id, true); await load(); } catch (e) { setErr(e.message); } }}>
@@ -344,36 +343,13 @@ export default function GuestPage() {
           </div>
         )}
 
-        {!thread.blocked && (
-          <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: both ? T.liveWash : "#FAFBFC" }}>
-            {both ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live }}>
-                <Ico.Handshake size={16} />
-                <span><strong style={{ fontWeight: 650 }}>You both agreed to swap real contact details.</strong> The pass still ends on schedule.</span>
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: T.mute, flex: 1, minWidth: 170 }}>
-                  {thread.revealMe ? "Waiting for them to agree. Nothing is shared until you both do."
-                    : thread.revealThem ? "They've offered to swap real contact details."
-                      : "Want to keep talking after this ends? You can swap real details if you both agree."}
-                </span>
-                <Btn size="sm" kind={thread.revealMe ? "quiet" : "primary"} icon={Ico.Handshake} disabled={thread.revealMe}
-                  onClick={async () => { try { await guest.reveal(code, xid.id); await load(); } catch (e) { setErr(e.message); } }}>
-                  {thread.revealMe ? "You've agreed" : "Swap real contact"}
-                </Btn>
-              </div>
-            )}
-          </div>
-        )}
-
-        {err && (
+                {err && (
           <div role="alert" style={{ padding: "9px 16px", background: T.stampWash, borderTop: "1px solid #F2C9C1", color: T.stamp, fontSize: 12.5 }}>{err}</div>
         )}
 
         {thread.blocked || !open ? (
           <div style={{ padding: "15px 16px", borderTop: `1px solid ${T.ruleSoft}`, textAlign: "center", fontSize: 13, color: T.mute }}>
-            {thread.blocked ? "You can't send messages on this pass." : `Quiet hours. You can send again from ${nextOpen(xid.hours)}.`}
+            {thread.blocked ? "You can't send messages on this XID." : `Quiet hours. You can send again from ${nextOpen(xid.hours)}.`}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 9, padding: narrow ? "10px 14px" : "12px 20px", paddingBottom: `max(${narrow ? 10 : 12}px, env(safe-area-inset-bottom))`, borderTop: `1px solid ${T.ruleSoft}`, alignItems: "center" }}>

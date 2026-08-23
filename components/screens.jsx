@@ -21,17 +21,17 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
       <header style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, flexWrap: "wrap", marginBottom: 26 }}>
         <div>
           <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>
-            Your passes
+            Your XIDs
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: T.mute, maxWidth: 520, lineHeight: 1.5 }}>
             {live.length === 0
-              ? "Nobody can reach you right now. Issue a pass when you need someone to."
+              ? "No open XIDs. Create one when you want someone to reach you."
               : `${live.length} ${live.length === 1 ? "person or group has" : "people and groups have"} a way to reach you. Each one ends on its own.`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {live.length > 1 && <Btn kind="danger" icon={Ico.Bolt} onClick={onKillAll}>Kill everything</Btn>}
-          <Btn icon={Ico.Plus} onClick={() => go("issue")}>Issue a pass</Btn>
+          {live.length > 1 && <Btn kind="danger" icon={Ico.Bolt} onClick={onKillAll}>End all</Btn>}
+          <Btn icon={Ico.Plus} onClick={() => go("issue")}>Create an XID</Btn>
         </div>
       </header>
 
@@ -39,7 +39,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 10, background: T.amberWash, border: "1px solid #F0DEBE", marginBottom: 22 }}>
           <Ico.Clock size={17} style={{ color: T.amber, flexShrink: 0 }} />
           <span style={{ fontSize: 13.5, color: T.ink, flex: 1 }}>
-            You're using all 3 free passes. Kill one to free a slot, or go Pro for unlimited.
+            All three free XIDs are open. End one to free a slot, or go Pro for unlimited.
           </span>
           <Btn size="sm" kind="quiet" onClick={() => go("plans")}>See plans</Btn>
         </div>
@@ -48,7 +48,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
       {state.xids.length > 2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.rule}`, background: T.card, marginBottom: 20, maxWidth: 380 }}>
           <Ico.Search size={15} style={{ color: T.faint }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search passes and messages"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search XIDs and messages"
             style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: SANS, fontSize: 13.5, color: T.ink }} />
           {q && <button onClick={() => setQ("")} style={{ border: "none", background: "none", color: T.faint, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>}
         </div>
@@ -58,12 +58,12 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 14, padding: "56px 30px", textAlign: "center", background: T.card }}>
           <div style={{ color: T.faint, marginBottom: 14 }}><Ico.Pass size={30} /></div>
           <h3 style={{ margin: "0 0 7px", fontFamily: SANS, fontSize: 18, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>
-            {q ? "Nothing matches that" : "No passes yet"}
+            {q ? "Nothing matches that" : "No XIDs yet"}
           </h3>
           <p style={{ margin: "0 0 18px", fontSize: 13.5, color: T.mute }}>
             {q ? "Try a different word, or clear the search." : "Selling something? Meeting someone? Start there."}
           </p>
-          {!q && <Btn icon={Ico.Plus} onClick={() => go("issue")}>Issue your first pass</Btn>}
+          {!q && <Btn icon={Ico.Plus} onClick={() => go("issue")}>Create your first XID</Btn>}
         </div>
       ) : (
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
@@ -100,7 +100,7 @@ export function Issue({ state, go, onIssue }) {
     return (
       <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 780, margin: "0 auto" }}>
         <button onClick={() => go("passes")} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "none", background: "none", color: T.mute, fontFamily: SANS, fontSize: 13, cursor: "pointer", padding: 0, marginBottom: 20 }}>
-          <Ico.Back size={15} /> Passes
+          <Ico.Back size={15} /> XIDs
         </button>
         <h1 style={{ margin: "0 0 7px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>What's this for?</h1>
         <p style={{ margin: "0 0 26px", fontSize: 14.5, color: T.mute }}>Pick the closest one. Every rule is set for you — you can change them after.</p>
@@ -127,7 +127,7 @@ export function Issue({ state, go, onIssue }) {
   }
 
   const previewXid = {
-    code: "•••••••", label: cfg.label || "Untitled pass", type: cfg.type,
+    code: "•••••••", label: cfg.label || "Untitled XID", type: cfg.type,
     createdAt: Date.now(), expiresAt: Date.now() + Math.min(customMs(cfg.durN, cfg.durUnit), planCapMs(state.plan)), maxConn: cfg.conn,
     hours: cfg.hours, oneShot: cfg.oneShot, status: "active", unread: 0, conversations: [],
   };
@@ -149,7 +149,7 @@ export function Issue({ state, go, onIssue }) {
           </Field>
 
           <Field label="Ends after"
-            hint={`Type any length. ${state.plan === "free" ? "Free passes run up to 7 days" : "Pro passes run up to 12 months"} — longer than that is capped. There's no never-expires option: a pass that never ends is a phone number with extra steps.`}>
+            hint={`Type any length. ${state.plan === "free" ? "Free XIDs run up to 7 days" : "Pro XIDs run up to 12 months"} — longer than that is capped. There's no never-expires option: an XID that never ends is just a phone number again.`}>
             <div style={{ display: "flex", gap: 8 }}>
               <input type="number" min="1" step="1" value={cfg.durN}
                 onChange={(e) => setCfg((c) => ({ ...c, durN: e.target.value }))}
@@ -239,15 +239,15 @@ export function Issue({ state, go, onIssue }) {
           {atCap ? (
             <div style={{ padding: "16px 18px", borderRadius: 11, background: T.amberWash, border: "1px solid #F0DEBE" }}>
               <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55, marginBottom: 13 }}>
-                <strong style={{ fontWeight: 650 }}>All three free passes are in use.</strong> Your pass is ready — kill one you're done with, or go Pro for unlimited at ₹99 a month.
+                <strong style={{ fontWeight: 650 }}>All three free XIDs are open.</strong> Your XID is ready — end one you're done with, or go Pro for unlimited at ₹99 a month.
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Btn kind="quiet" onClick={() => go("passes")}>Free up a slot</Btn>
-                <Btn onClick={() => go("plans")}>Go Pro and issue it</Btn>
+                <Btn onClick={() => go("plans")}>Go Pro and create it</Btn>
               </div>
             </div>
           ) : (
-            <Btn size="lg" icon={Ico.Arrow} onClick={() => onIssue(cfg, pid)}>Issue this pass</Btn>
+            <Btn size="lg" icon={Ico.Arrow} onClick={() => onIssue(cfg, pid)}>Create this XID</Btn>
           )}
         </div>
 
@@ -278,7 +278,7 @@ export function ShareSheet({ x, onClose }) {
   };
   return (
     <Modal onClose={onClose} width={460}>
-      <h2 style={{ margin: "0 0 5px", fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: "-0.025em", color: T.ink }}>Share this pass</h2>
+      <h2 style={{ margin: "0 0 5px", fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: "-0.025em", color: T.ink }}>Share this XID</h2>
       <p style={{ margin: "0 0 22px", fontSize: 13.5, color: T.mute, lineHeight: 1.5 }}>
         Put this wherever you'd normally put your number. Whoever opens it can message you — and only you — until it ends.
       </p>
@@ -307,7 +307,7 @@ export function ShareSheet({ x, onClose }) {
 }
 
 /* ------------------------------------------------------------------ chat -- */
-export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep }) {
+export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
   const narrow = useNarrow();
   const [cid, setCid] = useState(x.conversations[0]?.id ?? null);
   const [draft, setDraft] = useState("");
@@ -327,14 +327,13 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep
     setDraft("");
   };
 
-  const bothRevealed = cur?.revealMe && cur?.revealThem;
   const hits = q ? x.conversations.filter((c) => c.guest.toLowerCase().includes(q.toLowerCase()) || c.messages.some((m) => m.text.toLowerCase().includes(q.toLowerCase()))) : x.conversations;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: T.card }}>
       {/* header stub */}
       <div style={{ display: "flex", alignItems: "center", gap: narrow ? 9 : 14, padding: narrow ? "11px 12px" : "13px 20px", borderBottom: `1px solid ${T.ruleSoft}`, flexShrink: 0 }}>
-        <button onClick={() => go("passes")} aria-label="Back to your passes" title="Back to your passes" style={{ border: "none", background: "none", color: T.mute, cursor: "pointer", display: "flex", padding: 4 }}><Ico.Back size={18} /></button>
+        <button onClick={() => go("passes")} aria-label="Back to your XIDs" title="Back to your XIDs" style={{ border: "none", background: "none", color: T.mute, cursor: "pointer", display: "flex", padding: 4 }}><Ico.Back size={18} /></button>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <span style={{ fontFamily: SANS, fontSize: 15.5, fontWeight: 650, color: T.ink, letterSpacing: "-0.015em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.label}</span>
@@ -357,7 +356,7 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep
           <Btn size="sm" kind="quiet" icon={Ico.Ledger} title="Save your own copy before this ends"
             onClick={() => downloadTranscript(x, cur, "host")}>{narrow ? "Save" : "Save a copy"}</Btn>
         )}
-        {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={() => onKill(x)}>Kill</Btn>}
+        {live && <Btn size="sm" kind="danger" icon={Ico.Kill} onClick={() => onKill(x)}>End</Btn>}
       </div>
 
       {waiting ? (
@@ -437,7 +436,7 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep
                 <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: T.live, flexWrap: "wrap" }}>
                   <Ico.Shield size={16} />
                   <span style={{ flex: 1, minWidth: 200 }}>
-                    <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It survives the pass ending, and either of you can still read it. Nothing else about the pass changes.
+                    <strong style={{ fontWeight: 650 }}>You both agreed to keep this.</strong> It stays readable after the XID ends. Nothing else changes.
                   </span>
                   <Btn size="sm" kind="ghost" onClick={() => onKeep(x.id, cur.id, false)}>Stop keeping</Btn>
                 </div>
@@ -445,44 +444,16 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12.5, color: T.mute, flex: 1, minWidth: 200 }}>
                     {cur.keepMe
-                      ? "You've asked to keep this. It's still deleted when the pass ends unless they agree too."
+                      ? "You've asked to keep this. It still closes when the XID ends unless they agree too."
                       : cur.keepThem
-                        ? "They've asked to keep this conversation past the end date. It's only kept if you agree as well."
-                        : "By default this is deleted when the pass ends. If you both agree, it can be kept."}
+                        ? "They've asked to keep this past the end date. It's only kept if you agree as well."
+                        : "By default this closes when the XID ends. If you both agree, it can be kept."}
                   </span>
                   <Btn size="sm" kind={cur.keepMe ? "quiet" : "quiet"} icon={Ico.Shield}
                     disabled={cur.keepMe}
                     onClick={() => onKeep(x.id, cur.id, true)}>
                     {cur.keepMe ? "You've agreed" : "Keep this"}
                   </Btn>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* reveal handshake */}
-          {live && x.type === "individual" && cur && !cur.blocked && (
-            <div style={{ padding: "10px 22px", borderTop: `1px solid ${T.ruleSoft}`, background: bothRevealed ? T.liveWash : "#FAFBFC" }}>
-              {bothRevealed ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13, color: T.live }}>
-                  <Ico.Handshake size={16} />
-                  <span><strong style={{ fontWeight: 650 }}>Real contact shared both ways.</strong> {asGuest ? "You have their number now." : "They have yours, you have theirs."} The pass still ends on schedule.</span>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12.5, color: T.mute, flex: 1, minWidth: 180 }}>
-                    {(asGuest ? cur.revealThem : cur.revealMe)
-                      ? "Waiting for the other side to agree. Nothing is shared until both of you do."
-                      : (asGuest ? cur.revealMe : cur.revealThem)
-                        ? "They're offering to swap real contact details. Nothing is shared unless you agree too."
-                        : "Going ahead with this one? You can swap real contact details — but only if both of you agree."}
-                  </span>
-                  <Btn size="sm" kind={(asGuest ? cur.revealThem : cur.revealMe) ? "quiet" : "primary"} icon={Ico.Handshake}
-                    disabled={asGuest ? cur.revealThem : cur.revealMe}
-                    onClick={() => onReveal(x.id, cur.id, asGuest ? "them" : "me")}>
-                    {(asGuest ? cur.revealThem : cur.revealMe) ? "You've agreed" : "Swap real contact"}
-                  </Btn>
-                  {!asGuest && <Btn size="sm" kind="ghost" icon={Ico.Ban} onClick={() => onBlock(x.id, cur.id)}>{cur.blocked ? "Unblock" : "Block"}</Btn>}
                 </div>
               )}
             </div>
@@ -499,8 +470,8 @@ export function Chat({ x, go, onSend, onKill, onBlock, onReveal, onShare, onKeep
           ) : (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap", padding: "13px 22px", borderTop: `1px solid ${T.ruleSoft}`, fontSize: 13, color: T.mute, fontFamily: SANS }}>
               <span>
-                {cur?.blocked ? (asGuest ? "You can't send anything on this pass." : "You blocked this person. They can't send anything.") :
-                  !live ? "This pass ended. Nothing here can be recovered." :
+                {cur?.blocked ? (asGuest ? "You can't send anything on this XID." : "You blocked this person. They can't send anything.") :
+                  !live ? "This XID has ended. Nothing here can be recovered." :
                     `Quiet hours. Messages reopen at ${nextOpen(x.hours)}.`}
               </span>
               {cur?.blocked && live && !asGuest && (
@@ -526,13 +497,13 @@ export function WaitingRoom({ x, onShare }) {
           <QRCode value={url} size={148} />
         </div>
         <h3 style={{ margin: "0 0 8px", fontFamily: SANS, fontSize: 19, fontWeight: 650, letterSpacing: "-0.02em", color: T.ink }}>
-          Nobody has used this pass yet
+          Nobody has opened this XID yet
         </h3>
         <p style={{ margin: "0 0 8px", fontSize: 13.5, color: T.mute, lineHeight: 1.6 }}>
           Share the link or let someone scan the code. They pick a name and start typing — no signup, no app.
         </p>
         <p style={{ margin: "0 0 20px", fontFamily: MONO, fontSize: 12, color: T.faint, wordBreak: "break-all" }}>{url}</p>
-        <Btn icon={Ico.QR} onClick={() => onShare(x)}>Share this pass</Btn>
+        <Btn icon={Ico.QR} onClick={() => onShare(x)}>Share this XID</Btn>
         <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${T.ruleSoft}`, fontSize: 12.5, color: T.faint, lineHeight: 1.6 }}>
           Their messages land here. You'll get an alert on the first one.
         </div>
@@ -546,12 +517,12 @@ export function Banner({ x, asGuest, live, open, cur }) {
     display: "flex", alignItems: "flex-start", gap: 9, padding: "10px 13px", borderRadius: 9,
     background: bg, border: `1px solid ${border}`, color: fg, fontSize: 12.5, lineHeight: 1.55, marginBottom: 16, fontFamily: SANS,
   });
-  if (!live) return <div style={style(T.stampWash, "#F2C9C1", T.stamp)}><Ico.Shield size={15} /><span><strong style={{ fontWeight: 650 }}>This pass is {x.status}.</strong> Everything in it was deleted. This view is a local demo copy — in production the messages are already gone from the database.</span></div>;
+  if (!live) return <div style={style(T.stampWash, "#F2C9C1", T.stamp)}><Ico.Shield size={15} /><span><strong style={{ fontWeight: 650 }}>This XID is {x.status}.</strong> Everything in it was deleted. This view is a local demo copy — in production the messages are already gone from the database.</span></div>;
   if (asGuest) return (
     <div style={style(T.signalWash, "#DCE2FF", T.signalDeep)}>
       <Ico.Shield size={15} />
       <span>
-        <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation deletes itself in {countdown(x.expiresAt - Date.now()).text}.
+        <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation ends in {countdown(x.expiresAt - Date.now()).text}.
         {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(x.hours)}.</>}
       </span>
     </div>
@@ -592,13 +563,13 @@ export function Ledger({ state }) {
 
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 820, margin: "0 auto" }}>
-      <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>Destruction ledger</h1>
+      <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>History</h1>
       <p style={{ margin: "0 0 26px", fontSize: 14, color: T.mute, maxWidth: 560, lineHeight: 1.5 }}>
-        A receipt for every pass that ended. We keep the counts and the timestamps so you can prove it happened. The messages themselves are gone — unless both you and the other person explicitly agreed to keep a conversation, which is counted separately below.
+        A record of every XID that has run its course. We keep the counts and the timestamps, not the messages — unless you and the other person both agreed to keep one, which is counted separately below.
       </p>
 
       <div style={{ display: "flex", gap: 26, padding: "18px 22px", background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, marginBottom: 18, flexWrap: "wrap" }}>
-        {[["Passes destroyed", all.length], ["Messages erased", total], ["Kept by mutual consent", state.kept || 0]].map(([k, v]) => (
+        {[["XIDs completed", all.length], ["Messages cleared", total], ["Kept by mutual consent", state.kept || 0]].map(([k, v]) => (
           <div key={k}>
             <div style={{ fontFamily: MONO, fontSize: 27, fontWeight: 500, color: T.ink, letterSpacing: "-0.02em" }}>{v}</div>
             <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: T.mute, marginTop: 3 }}>{k}</div>
@@ -621,15 +592,15 @@ export function Ledger({ state }) {
 
       {needle && (
         <div style={{ fontFamily: MONO, fontSize: 11, color: T.mute, marginBottom: 12 }}>
-          {rs.length} of {all.length} receipts
+          {rs.length} of {all.length} records
         </div>
       )}
 
       {rs.length === 0 ? (
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 12, padding: "44px 24px", textAlign: "center", color: T.mute, fontSize: 13.5, background: T.card }}>
           {needle
-            ? <>Nothing matches “{q}”. Receipts only hold the pass name, code, date and reason — not the messages.</>
-            : "Nothing destroyed yet. Receipts land here when a pass ends."}
+            ? <>Nothing matches “{q}”. Records only hold the XID name, code, date and reason — not the messages.</>
+            : "Nothing here yet. Records appear when an XID ends."}
         </div>
       ) : (
         <div style={{ display: "grid", gap: 9 }}>
@@ -643,7 +614,7 @@ export function Ledger({ state }) {
                 <div style={{ fontFamily: MONO, fontSize: 12.5, color: T.ink }}>{r.destroyed} messages · {r.connections} {r.connections === 1 ? "person" : "people"}</div>
                 <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>{r.reason} · {stampDate(r.ended)}</div>
               </div>
-              <Chip tone="dead">erased</Chip>
+              <Chip tone="dead">cleared</Chip>
             </div>
           ))}
         </div>
@@ -656,11 +627,11 @@ export function Ledger({ state }) {
 export function Plans({ state, go, onUpgrade }) {
   const narrow = useNarrow();
   const rows = [
-    { k: "Active passes at once", free: "3", day: "3", pro: "Unlimited" },
-    { k: "Longest a pass can run", free: "7 days", day: "7 days", pro: "30 days" },
-    { k: "People per pass", free: "Up to 5", day: "Unlimited", pro: "Unlimited" },
+    { k: "Open XIDs at once", free: "3", day: "3", pro: "Unlimited" },
+    { k: "Longest an XID can run", free: "7 days", day: "7 days", pro: "12 months" },
+    { k: "People per XID", free: "Up to 5", day: "Unlimited", pro: "Unlimited" },
     { k: "Group rooms", free: "—", day: "Yes", pro: "Yes" },
-    { k: "Destruction receipts", free: "Yes", day: "Yes", pro: "Yes" },
+    { k: "History records", free: "Yes", day: "Yes", pro: "Yes" },
     { k: "Alerts when someone messages", free: "Yes", day: "Yes", pro: "Yes" },
   ];
   const Card = ({ name, price, note, cta, tone, onClick, current }) => (
@@ -684,9 +655,9 @@ export function Plans({ state, go, onUpgrade }) {
         Free covers most people. Pay when you need more than three things going at once — or buy a single day when something big is happening.
       </p>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
-        <Card name="Free" price="₹0" note="Three passes at a time, up to a week each. No card." cta="Current" current={state.plan === "free"} />
+        <Card name="Free" price="₹0" note="Three XIDs at a time, up to a week each. No card." cta="Current" current={state.plan === "free"} />
         <Card name="Day pass" price="₹49" note="24 hours of unlimited passes. For the weekend you're selling a car." cta="Buy a day" onClick={() => onUpgrade("day")} />
-        <Card name="Pro" price="₹99" note="Per month. Unlimited passes, 30-day durations, group rooms." cta="Go Pro" tone="signal" current={state.plan === "pro"} onClick={() => onUpgrade("pro")} />
+        <Card name="Pro" price="₹99" note="Per month. Unlimited XIDs, long durations, group rooms." cta="Go Pro" tone="signal" current={state.plan === "pro"} onClick={() => onUpgrade("pro")} />
       </div>
       <div style={{ background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, overflow: "hidden" }}>
         {rows.map((r, i) => (
@@ -731,17 +702,17 @@ export function KillConfirm({ target, onCancel, onConfirm }) {
     <Modal onClose={onCancel} width={420}>
       <div style={{ display: "inline-flex", padding: 9, borderRadius: 9, background: T.stampWash, color: T.stamp, marginBottom: 14 }}><Ico.Kill size={19} /></div>
       <h2 style={{ margin: "0 0 8px", fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: "-0.025em", color: T.ink }}>
-        {many ? `Kill all ${list.length} passes?` : `Kill "${list[0].label}"?`}
+        {many ? `End all ${list.length} XIDs?` : `End “${list[0].label}”?`}
       </h2>
       <p style={{ margin: "0 0 6px", fontSize: 13.5, color: T.mute, lineHeight: 1.6 }}>
-        {msgs} {msgs === 1 ? "message" : "messages"} across {people} {people === 1 ? "person" : "people"} will be deleted immediately — on their side too. The link stops working. There's no undo and no archive.
+        {msgs} {msgs === 1 ? "message" : "messages"} across {people} {people === 1 ? "person" : "people"} will be cleared immediately — on their side too. The link stops working. There's no undo and no archive.
       </p>
       <p style={{ margin: "0 0 20px", fontSize: 13, color: T.mute, lineHeight: 1.6 }}>
-        You'll get a receipt in your ledger. If you need the conversation itself, close this and use <strong style={{ fontWeight: 650, color: T.ink }}>Save a copy</strong> first — afterwards nobody can recover it.
+        You'll get a record in your history. If you need the conversation itself, close this and use <strong style={{ fontWeight: 650, color: T.ink }}>Save a copy</strong> first — afterwards nobody can recover it.
       </p>
       <div style={{ display: "flex", gap: 9 }}>
         <Btn kind="quiet" style={{ flex: 1 }} onClick={onCancel}>Keep it</Btn>
-        <Btn kind="solidDanger" style={{ flex: 1 }} icon={Ico.Kill} onClick={onConfirm}>{many ? "Kill everything" : "Kill this pass"}</Btn>
+        <Btn kind="solidDanger" style={{ flex: 1 }} icon={Ico.Kill} onClick={onConfirm}>{many ? "End all" : "End this XID"}</Btn>
       </div>
     </Modal>
   );
@@ -776,10 +747,10 @@ export function Auth({ onIn }) {
       <div style={{ padding: narrow ? "38px 22px" : "56px 52px", display: "flex", flexDirection: "column", justifyContent: "center", background: T.ink, color: "#fff" }}>
         <Wordmark light />
         <h1 style={{ margin: "30px 0 16px", fontFamily: SANS, fontSize: narrow ? 30 : 40, fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1.06 }}>
-          Stop handing out<br />a permanent number.
+          One identity<br />per conversation.
         </h1>
         <p style={{ margin: "0 0 30px", fontSize: 15.5, lineHeight: 1.6, color: "rgba(255,255,255,.62)", maxWidth: 400 }}>
-          Issue a pass instead. It carries a conversation, obeys your rules, and deletes itself when it's done. The other person never signs up for anything.
+          Create an XID instead. It carries a conversation, obeys your rules, and deletes itself when it's done. The other person never signs up for anything.
         </p>
         <div style={{ display: "flex", gap: 26, flexWrap: "wrap" }}>
           {[["Patent", "No. 550231"], ["They install", "Nothing"], ["We keep", "Nothing"]].map(([k, v]) => (

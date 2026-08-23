@@ -71,11 +71,11 @@ export default function HostApp() {
   /* ---------------------------------------------------------------- states */
   if (user === undefined) return <Splash label="Checking your session" />;
   if (!user) return <Auth onIn={() => auth.user().then(setUser)} />;
-  if (!state) return <Splash label="Loading your passes" />;
+  if (!state) return <Splash label="Loading your XIDs" />;
 
   const open = state.xids.find((x) => x.id === openId);
   const NAV = [
-    { v: "passes", label: "Passes", icon: Ico.Pass },
+    { v: "passes", label: "XIDs", icon: Ico.Pass },
     { v: "ledger", label: "Ledger", icon: Ico.Ledger },
     { v: "plans", label: "Plans", icon: Ico.Bolt },
   ];
@@ -111,8 +111,8 @@ export default function HostApp() {
               </div>
               <div style={{ fontSize: 12, color: T.mute, lineHeight: 1.45, marginBottom: 9 }}>
                 {state.plan === "free"
-                  ? `${state.xids.filter((x) => x.status === "active").length} of 3 passes in use`
-                  : "Unlimited passes"}
+                  ? `${state.xids.filter((x) => x.status === "active").length} of 3 XIDs in use`
+                  : "Unlimited XIDs"}
               </div>
               {state.plan === "free" && <Btn size="sm" kind="quiet" style={{ width: "100%", marginBottom: 7 }} onClick={() => go("plans")}>Upgrade</Btn>}
               <button onClick={() => auth.signOut().then(() => setUser(null))}
@@ -137,7 +137,7 @@ export default function HostApp() {
                 await refresh();
                 setShare(x);
                 setView("passes");
-              } catch (e) { flash(e.message || "Couldn't create that pass."); }
+              } catch (e) { flash(e.message || "Couldn't create that XID."); }
             }} />
           )}
           {view === "ledger" && <Ledger state={state} />}
@@ -145,7 +145,7 @@ export default function HostApp() {
             <Plans state={state} go={go} onUpgrade={async (kind) => {
               await db.setPlan("pro", kind === "day" ? 1 : null);
               await refresh();
-              flash(kind === "day" ? "Day pass active for 24 hours." : "You're on Pro. Unlimited passes.");
+              flash(kind === "day" ? "Day pass active for 24 hours." : "You're on Pro. Unlimited XIDs.");
               setView("passes");
             }} />
           )}
@@ -157,7 +157,6 @@ export default function HostApp() {
                 const c = open.conversations.find((v) => v.id === cid);
                 return db.setBlocked(xid, cid, !c.blocked);
               })}
-              onReveal={act((xid, cid, who) => db.reveal(xid, cid, who))}
               onKeep={act((xid, cid, on) => db.setKeep(xid, cid, on),
                 "Saved. It's kept only once they agree too.")} />
           )}
@@ -175,9 +174,9 @@ export default function HostApp() {
               await refresh();
               setView("passes");
               flash(list.length > 1
-                ? `${list.length} passes destroyed. Receipts are in your ledger.`
-                : "Pass destroyed. Receipt is in your ledger.");
-            } catch { flash("Couldn't destroy that pass. Try again."); }
+                ? `${list.length} XIDs ended. Records are in your history.`
+                : "XID ended. Record is in your history.");
+            } catch { flash("Couldn't end that XID. Try again."); }
           }} />
       )}
       {toast && (
