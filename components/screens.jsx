@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, UNITS, auth, buildTranscript, clock, countdown, customMs, db, downloadTranscript, durToParts, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, planCapLabel, planCapMs, preset, selectStyle, stampDate, useNarrow, withinHours } from "@/lib/core";
+import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, UNITS, auth, buildTranscript, clock, countdown, customMs, db, deviceZone, downloadTranscript, durToParts, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, planCapLabel, planCapMs, preset, selectStyle, stampDate, useNarrow, withinHours, zoneLabel } from "@/lib/core";
 
 /* ------------------------------------------------------------- dashboard -- */
 export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
@@ -215,7 +215,9 @@ export function Issue({ state, go, onIssue }) {
             )}
           </Field>
 
-          <Field label="When they can message" hint={cfg.hours === "any" ? undefined : "Outside these hours they see a note telling them when you reopen. Nothing gets through."}>
+          <Field label="When they can message"
+            hint={cfg.hours === "any" ? undefined
+              : `Outside these hours they see a note telling them when you reopen — nothing gets through. Your hours, in ${zoneLabel(deviceZone())}, wherever they happen to be.`}>
             <select value={cfg.hours} onChange={(e) => setCfg((c) => ({ ...c, hours: e.target.value }))} style={selectStyle}>
               {HOURS.map((h) => <option key={h.v} value={h.v}>{h.label}</option>)}
             </select>
@@ -316,7 +318,7 @@ export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
   const endRef = useRef(null);
   const cur = x.conversations.find((c) => c.id === cid) || x.conversations[0];
   const live = x.status === "active";
-  const open = withinHours(x.hours);
+  const open = withinHours(x.hours, x.tz);
   const waiting = x.conversations.length === 0;
 
   useEffect(() => { endRef.current?.scrollIntoView?.({ block: "end" }); }, [cur?.messages.length, cid, asGuest]);
@@ -472,7 +474,7 @@ export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
               <span>
                 {cur?.blocked ? (asGuest ? "You can't send anything on this XID." : "You blocked this person. They can't send anything.") :
                   !live ? "This XID has ended. Nothing here can be recovered." :
-                    `Quiet hours. Messages reopen at ${nextOpen(x.hours)}.`}
+                    `Quiet hours. Messages reopen at ${nextOpen(x.hours, x.tz)}.`}
               </span>
               {cur?.blocked && live && !asGuest && (
                 <Btn size="sm" kind="quiet" icon={Ico.Check} onClick={() => onBlock(x.id, cur.id)}>Unblock</Btn>
@@ -523,7 +525,7 @@ export function Banner({ x, asGuest, live, open, cur }) {
       <Ico.Shield size={15} />
       <span>
         <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation ends in {countdown(x.expiresAt - Date.now()).text}.
-        {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(x.hours)}.</>}
+        {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(x.hours, x.tz)}.</>}
       </span>
     </div>
   );

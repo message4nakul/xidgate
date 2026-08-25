@@ -104,17 +104,55 @@ export const HOURS = [
   { v: "8-12", label: "Mornings · 8am–12pm", range: [8, 12] },
 ];
 export const hoursMeta = (v) => HOURS.find((h) => h.v === v) || HOURS[0];
-export function withinHours(v, now = new Date()) {
+/* The hour is read in the XID's own zone, not the viewer's.
+
+   These used to call Date.getHours(), which answers in whatever zone the device
+   happens to be in. The server judges quiet hours in the host's zone, so a guest
+   abroad saw "closed" while the server accepted their message — or the reverse.
+   Both sides now ask the same question of the same clock. */
+export const deviceZone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata"; }
+  catch (_) { return "Asia/Kolkata"; }
+};
+
+export function hourIn(tz, at = new Date()) {
+  try {
+    return Number(new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz || "Asia/Kolkata", hour: "numeric", hour12: false,
+    }).format(at));
+  } catch (_) {
+    /* An unrecognised zone must not silently become UTC and shift the window. */
+    return Number(new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata", hour: "numeric", hour12: false,
+    }).format(at));
+  }
+}
+
+/* Names the zone the way a person would say it: "India time", "UK time". */
+export function zoneLabel(tz) {
+  if (!tz) return "";
+  try {
+    const name = new Intl.DateTimeFormat("en-GB", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value;
+    return name || tz.split("/").pop().replace(/_/g, " ");
+  } catch (_) { return tz; }
+}
+
+export function withinHours(v, tz, at = new Date()) {
   const r = hoursMeta(v).range;
   if (!r) return true;
-  const h = now.getHours();
+  const h = hourIn(tz, at);
   return r[0] <= r[1] ? h >= r[0] && h < r[1] : h >= r[0] || h < r[1];
 }
-export function nextOpen(v) {
+export function nextOpen(v, tz) {
   const r = hoursMeta(v).range;
   if (!r) return null;
-  const h = new Date().getHours();
-  return h < r[0] ? `${r[0] % 12 || 12}${r[0] < 12 ? "am" : "pm"} today` : `${r[0] % 12 || 12}${r[0] < 12 ? "am" : "pm"} tomorrow`;
+  const h = hourIn(tz);
+  const when = `${r[0] % 12 || 12}${r[0] < 12 ? "am" : "pm"}`;
+  const zone = zoneLabel(tz);
+  const day = h < r[0] ? "today" : "tomorrow";
+  /* Say whose clock this is — the guest is often in a different one. */
+  return zone ? `${when} ${day} (${zone})` : `${when} ${day}`;
 }
 
 /* -------------------------------------------------- QR (byte mode, ECC M) -- */
@@ -470,7 +508,7 @@ export function Pass({ x, onOpen, onShare, onKill, onReopen, compact = false }) 
         <div style={{ display: "flex", alignItems: "center", gap: 13, fontFamily: MONO, fontSize: 11, color: T.mute, flexWrap: "wrap", marginBottom: compact ? 0 : 14 }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Ico.Users size={12} />{conns}{x.maxConn ? `/${x.maxConn}` : ""}</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Ico.Msg size={12} />{msgs}</span>
-          {x.hours !== "any" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: withinHours(x.hours) ? T.mute : T.amber }}><Ico.Clock size={12} />{withinHours(x.hours) ? "open" : "quiet"}</span>}
+          {x.hours !== "any" && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: withinHours(x.hours, x.tz) ? T.mute : T.amber }}><Ico.Clock size={12} />{withinHours(x.hours, x.tz) ? "open" : "quiet"}</span>}
           {x.oneShot && <Chip tone={x.sealed ? "warn" : "signal"}>{x.sealed ? "closed to new" : "one‑shot"}</Chip>}
           {x.unread > 0 && live && <span style={{ marginLeft: "auto", background: T.signal, color: "#fff", borderRadius: 9, padding: "1px 7px", fontSize: 10.5, fontWeight: 600 }}>{x.unread} new</span>}
         </div>
@@ -635,7 +673,7 @@ const shape = (x) => ({
   id: x.id, code: x.code, label: x.label, presetId: x.preset,
   type: x.kind, createdAt: new Date(x.created_at).getTime(),
   expiresAt: new Date(x.expires_at).getTime(),
-  maxConn: x.max_conn, maxMsgs: x.max_msgs, hours: x.hours,
+  maxConn: x.max_conn, maxMsgs: x.max_msgs, hours: x.hours, tz: x.tz,
   oneShot: x.one_shot, autoExtend: x.auto_extend, status: x.status, sealed: x.sealed,
   unread: 0, conversations: [],
 });
@@ -760,7 +798,7 @@ export const db = {
     const { data, error } = await sb.from("xids").insert({
       owner: u.user.id, code: newCode(), label: cfg.label || preset(presetId).label,
       preset: presetId, kind: cfg.type, max_conn: cfg.conn, max_msgs: cfg.msgs,
-      hours: cfg.hours, one_shot: cfg.oneShot, auto_extend: cfg.autoExtend,
+      hours: cfg.hours, tz: deviceZone(), one_shot: cfg.oneShot, auto_extend: cfg.autoExtend,
       expires_at: new Date(expires).toISOString(),
       hard_expiry: new Date(Date.now() + Math.min(span * 2, planCapMs(plan) * 2)).toISOString(),
     }).select().single();

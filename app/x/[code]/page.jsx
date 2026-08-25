@@ -153,7 +153,7 @@ export default function GuestPage() {
 
   const left = new Date(xid.expires_at).getTime() - Date.now();
   const cd = countdown(left);
-  const open = withinHours(xid.hours);
+  const open = withinHours(xid.hours, xid.tz);
 
   /* ------------------------------------------------------------ join ----- */
   if (!thread) {
@@ -246,7 +246,7 @@ export default function GuestPage() {
             <Ico.Shield size={15} />
             <span>
               <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation closes in {cd.text}.
-              {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours)}.</>}
+              {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours, xid.tz)}.</>}
             </span>
           </div>
 
@@ -352,7 +352,7 @@ export default function GuestPage() {
 
         {thread.blocked || !open ? (
           <div style={{ padding: "15px 16px", borderTop: `1px solid ${T.ruleSoft}`, textAlign: "center", fontSize: 13, color: T.mute }}>
-            {thread.blocked ? "You can't send messages on this XID." : `Quiet hours. You can send again from ${nextOpen(xid.hours)}.`}
+            {thread.blocked ? "You can't send messages on this XID." : `Quiet hours. You can send again from ${nextOpen(xid.hours, xid.tz)}.`}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 9, padding: narrow ? "10px 14px" : "12px 20px", paddingBottom: `max(${narrow ? 10 : 12}px, env(safe-area-inset-bottom))`, borderTop: `1px solid ${T.ruleSoft}`, alignItems: "center" }}>
