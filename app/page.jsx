@@ -105,28 +105,14 @@ export default function Landing() {
         </ol>
       </section>
 
-      {/* ------------------------------------------------------------ pricing */}
+      {/* --------------------------------------------------------------- close */}
       <section style={{ padding: narrow ? "8px 18px 56px" : "8px 32px 84px", maxWidth: 1000, margin: "0 auto" }}>
-        <h2 style={{ margin: "0 0 26px", fontFamily: SANS, fontSize: narrow ? 26 : 32, fontWeight: 700, letterSpacing: "-0.035em", color: T.ink }}>
-          Free for most people
+        <h2 style={{ margin: "0 0 14px", fontFamily: SANS, fontSize: narrow ? 26 : 32, fontWeight: 700, letterSpacing: "-0.035em", color: T.ink }}>
+          Free, and they never sign up
         </h2>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: narrow ? "1fr" : "repeat(3, 1fr)", marginBottom: 30 }}>
-          {[
-            ["Free", "₹0", "Three XIDs at a time, up to a week each. No card needed.", false],
-            ["Day pass", "₹49", "Twenty-four hours of unlimited XIDs. For the weekend you're selling a car.", false],
-            ["Pro", "₹99", "Per month. Unlimited XIDs, long durations, group rooms.", true],
-          ].map(([name, price, note, hero]) => (
-            <div key={name} style={{
-              background: T.card, borderRadius: 12, padding: "22px 20px",
-              border: `1px solid ${hero ? T.signal : T.rule}`,
-              boxShadow: hero ? "0 10px 30px -20px rgba(27,59,255,.6)" : "none",
-            }}>
-              <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: hero ? T.signal : T.mute, marginBottom: 10 }}>{name}</div>
-              <div style={{ fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>{price}</div>
-              <p style={{ margin: "8px 0 0", fontSize: 13, color: T.mute, lineHeight: 1.55 }}>{note}</p>
-            </div>
-          ))}
-        </div>
+        <p style={{ margin: "0 0 26px", fontSize: narrow ? 15 : 16.5, color: T.mute, maxWidth: 560, lineHeight: 1.6 }}>
+          Create as many XIDs as you like, for as long as you need. No card, no plan, nothing to cancel. The person you share one with installs nothing and signs up for nothing.
+        </p>
         <Link href="/app" style={{ textDecoration: "none" }}>
           <Btn size="lg" icon={Ico.Arrow}>Create your first XID</Btn>
         </Link>

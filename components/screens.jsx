@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Btn, Chip, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, PEOPLE, PLAN, PRESETS, Pass, QRCode, SANS, T, Toggle, UNITS, auth, buildTranscript, clock, countdown, customMs, db, deviceZone, downloadTranscript, durToParts, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, planCapLabel, planCapMs, preset, selectStyle, stampDate, useNarrow, withinHours, zoneLabel } from "@/lib/core";
+import { Btn, Chip, DAILY_XID_LIMIT, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, MAX_SPAN_LABEL, MAX_SPAN_MS, PEOPLE, PRESETS, Pass, QRCode, SANS, T, Toggle, UNITS, auth, buildTranscript, clock, countdown, customMs, dailyQuota, db, deviceZone, downloadTranscript, durToParts, expiryFrom, hoursMeta, linkFor, nextOpen, peopleOption, peopleValue, preset, selectStyle, stampDate, useNarrow, withinHours, zoneLabel } from "@/lib/core";
 
 /* ------------------------------------------------------------- dashboard -- */
 export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
@@ -14,7 +14,6 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
     x.code.toLowerCase().includes(q.toLowerCase()) ||
     x.conversations.some((c) => c.messages.some((m) => m.text.toLowerCase().includes(q.toLowerCase())));
   const shown = [...live, ...done].filter(match);
-  const atCap = state.plan === "free" && live.length >= PLAN.free.passes;
 
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 1080, margin: "0 auto" }}>
@@ -35,15 +34,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
         </div>
       </header>
 
-      {atCap && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 10, background: T.amberWash, border: "1px solid #F0DEBE", marginBottom: 22 }}>
-          <Ico.Clock size={17} style={{ color: T.amber, flexShrink: 0 }} />
-          <span style={{ fontSize: 13.5, color: T.ink, flex: 1 }}>
-            All three free XIDs are open. End one to free a slot, or go Pro for unlimited.
-          </span>
-          <Btn size="sm" kind="quiet" onClick={() => go("plans")}>See plans</Btn>
-        </div>
-      )}
+      
 
       {state.xids.length > 2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.rule}`, background: T.card, marginBottom: 20, maxWidth: 380 }}>
@@ -128,11 +119,9 @@ export function Issue({ state, go, onIssue }) {
 
   const previewXid = {
     code: "•••••••", label: cfg.label || "Untitled XID", type: cfg.type,
-    createdAt: Date.now(), expiresAt: Date.now() + Math.min(customMs(cfg.durN, cfg.durUnit), planCapMs(state.plan)), maxConn: cfg.conn,
+    createdAt: Date.now(), expiresAt: Date.now() + Math.min(customMs(cfg.durN, cfg.durUnit), MAX_SPAN_MS), maxConn: cfg.conn,
     hours: cfg.hours, oneShot: cfg.oneShot, status: "active", unread: 0, conversations: [],
   };
-  const durOptions = Object.keys(DUR).filter((d) => state.plan === "pro" || DUR[d] <= DUR[PLAN.free.maxDur]);
-  const atCap = state.plan === "free" && state.xids.filter((x) => x.status === "active").length >= PLAN.free.passes;
 
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 900, margin: "0 auto" }}>
@@ -149,7 +138,7 @@ export function Issue({ state, go, onIssue }) {
           </Field>
 
           <Field label="Ends after"
-            hint={`Type any length. ${state.plan === "free" ? "Free XIDs run up to 7 days" : "Pro XIDs run up to 12 months"} — longer than that is capped. There's no never-expires option: an XID that never ends is just a phone number again.`}>
+            hint={`Type any length, up to ${MAX_SPAN_LABEL}. There's no never-expires option: an XID that never ends is just a phone number again.`}>
             <div style={{ display: "flex", gap: 8 }}>
               <input type="number" min="1" step="1" value={cfg.durN}
                 onChange={(e) => setCfg((c) => ({ ...c, durN: e.target.value }))}
@@ -161,12 +150,12 @@ export function Issue({ state, go, onIssue }) {
             </div>
             {(() => {
               const want = customMs(cfg.durN, cfg.durUnit);
-              const cap = planCapMs(state.plan);
+              const cap = MAX_SPAN_MS;
               const ends = new Date(Date.now() + Math.min(want, cap));
               return (
                 <div style={{ marginTop: 7, fontFamily: MONO, fontSize: 11, color: want > cap ? T.amber : T.mute }}>
                   {want > cap
-                    ? `Capped at ${planCapLabel(state.plan)} on your plan — ends ${stampDate(ends)}`
+                    ? `That is longer than ${MAX_SPAN_LABEL}, so it ends ${stampDate(ends)}`
                     : `Ends ${stampDate(ends)}`}
                 </div>
               );
@@ -238,19 +227,31 @@ export function Issue({ state, go, onIssue }) {
             </div>
           )}
 
-          {atCap ? (
-            <div style={{ padding: "16px 18px", borderRadius: 11, background: T.amberWash, border: "1px solid #F0DEBE" }}>
-              <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55, marginBottom: 13 }}>
-                <strong style={{ fontWeight: 650 }}>All three free XIDs are open.</strong> Your XID is ready — end one you're done with, or go Pro for unlimited at ₹99 a month.
+          {(() => {
+            const q = dailyQuota(state.xids);
+            if (q.left === 0) {
+              return (
+                <div style={{ padding: "16px 18px", borderRadius: 11, background: T.amberWash, border: "1px solid #F0DEBE" }}>
+                  <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55, marginBottom: 13 }}>
+                    <strong style={{ fontWeight: 650 }}>That's {DAILY_XID_LIMIT} XIDs in 24 hours.</strong>{" "}
+                    It's a guard against abuse, not a paywall — nothing to buy.{" "}
+                    {q.nextAt && <>You can create another from <strong style={{ fontWeight: 650 }}>{clock(q.nextAt)}</strong>, or end one you're finished with now.</>}
+                  </div>
+                  <Btn kind="quiet" onClick={() => go("passes")}>See your open XIDs</Btn>
+                </div>
+              );
+            }
+            return (
+              <div>
+                <Btn size="lg" icon={Ico.Arrow} onClick={() => onIssue(cfg, pid)}>Create this XID</Btn>
+                {q.left <= 3 && (
+                  <div style={{ marginTop: 9, fontFamily: MONO, fontSize: 11, color: T.mute }}>
+                    {q.left} more today
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <Btn kind="quiet" onClick={() => go("passes")}>Free up a slot</Btn>
-                <Btn onClick={() => go("plans")}>Go Pro and create it</Btn>
-              </div>
-            </div>
-          ) : (
-            <Btn size="lg" icon={Ico.Arrow} onClick={() => onIssue(cfg, pid)}>Create this XID</Btn>
-          )}
+            );
+          })()}
         </div>
 
         <aside style={{ position: narrow ? "static" : "sticky", top: 24, order: narrow ? -1 : 0 }}>
@@ -621,56 +622,6 @@ export function Ledger({ state }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------- plans -- */
-export function Plans({ state, go, onUpgrade }) {
-  const narrow = useNarrow();
-  const rows = [
-    { k: "Open XIDs at once", free: "3", day: "3", pro: "Unlimited" },
-    { k: "Longest an XID can run", free: "7 days", day: "7 days", pro: "12 months" },
-    { k: "People per XID", free: "Up to 5", day: "Unlimited", pro: "Unlimited" },
-    { k: "Group rooms", free: "—", day: "Yes", pro: "Yes" },
-    { k: "History records", free: "Yes", day: "Yes", pro: "Yes" },
-    { k: "Alerts when someone messages", free: "Yes", day: "Yes", pro: "Yes" },
-  ];
-  const Card = ({ name, price, note, cta, tone, onClick, current }) => (
-    <div style={{
-      flex: 1, minWidth: 210, background: T.card, borderRadius: 12, padding: "22px 20px",
-      border: `1px solid ${tone === "signal" ? T.signal : T.rule}`,
-      boxShadow: tone === "signal" ? "0 10px 30px -20px rgba(27,59,255,.6)" : "none",
-    }}>
-      <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".12em", textTransform: "uppercase", color: tone === "signal" ? T.signal : T.mute, marginBottom: 10 }}>{name}</div>
-      <div style={{ fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>{price}</div>
-      <div style={{ fontSize: 12.5, color: T.mute, margin: "6px 0 18px", lineHeight: 1.5, minHeight: 36 }}>{note}</div>
-      <Btn kind={current ? "quiet" : tone === "signal" ? "primary" : "quiet"} style={{ width: "100%" }} disabled={current} onClick={onClick}>
-        {current ? "Your plan" : cta}
-      </Btn>
-    </div>
-  );
-  return (
-    <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 860, margin: "0 auto" }}>
-      <h1 style={{ margin: "0 0 6px", fontFamily: SANS, fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>Plans</h1>
-      <p style={{ margin: "0 0 26px", fontSize: 14, color: T.mute, maxWidth: 540, lineHeight: 1.5 }}>
-        Free covers most people. Pay when you need more than three things going at once — or buy a single day when something big is happening.
-      </p>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
-        <Card name="Free" price="₹0" note="Three XIDs at a time, up to a week each. No card." cta="Current" current={state.plan === "free"} />
-        <Card name="Day pass" price="₹49" note="24 hours of unlimited passes. For the weekend you're selling a car." cta="Buy a day" onClick={() => onUpgrade("day")} />
-        <Card name="Pro" price="₹99" note="Per month. Unlimited XIDs, long durations, group rooms." cta="Go Pro" tone="signal" current={state.plan === "pro"} onClick={() => onUpgrade("pro")} />
-      </div>
-      <div style={{ background: T.card, border: `1px solid ${T.rule}`, borderRadius: 11, overflow: "hidden" }}>
-        {rows.map((r, i) => (
-          <div key={r.k} style={{ display: "grid", gridTemplateColumns: narrow ? "1.4fr 1fr 1fr 1fr" : "1.6fr 1fr 1fr 1fr", padding: narrow ? "11px 12px" : "12px 18px", borderTop: i ? `1px solid ${T.ruleSoft}` : "none", fontFamily: SANS, fontSize: 13 }}>
-            <span style={{ color: T.mute }}>{r.k}</span>
-            <span style={{ color: T.ink, textAlign: "center" }}>{r.free}</span>
-            <span style={{ color: T.ink, textAlign: "center" }}>{r.day}</span>
-            <span style={{ color: T.signalDeep, textAlign: "center", fontWeight: 600 }}>{r.pro}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

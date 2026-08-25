@@ -62,8 +62,35 @@ export const UNITS = [
 ];
 export const unitMs = (u) => (UNITS.find((x) => x.v === u) || UNITS[1]).ms;
 export const customMs = (n, u) => Math.max(1, Math.floor(Number(n) || 1)) * unitMs(u);
-export const planCapMs = (plan) => (plan === "pro" ? 365 * 864e5 : 7 * 864e5);
-export const planCapLabel = (plan) => (plan === "pro" ? "12 months" : "7 days");
+/* One ceiling for everyone. It exists for storage, not for billing: expiry is
+   what keeps this O(open XIDs) instead of O(everything ever), so an XID has to
+   end sometime. A year is far past anything a real conversation needs, so it
+   should never read as a limit to anyone using this normally. */
+export const MAX_SPAN_MS = 365 * 864e5;
+
+/* An abuse ceiling, not a plan. It is a rolling 24 hours rather than a calendar
+   day so midnight can't be used to create twenty in two minutes, and so the
+   allowance trickles back one at a time instead of all at once. Mirrored by a
+   trigger in the database — this copy exists only to warn people early. */
+export const DAILY_XID_LIMIT = 30;
+export const DAILY_WINDOW_MS = 864e5;
+
+/* How many are left, and when the next one frees up. */
+export function dailyQuota(xids = []) {
+  const since = Date.now() - DAILY_WINDOW_MS;
+  const recent = xids
+    .map((x) => x.createdAt)
+    .filter((t) => t && t > since)
+    .sort((a, b) => a - b);
+  const used = recent.length;
+  return {
+    used,
+    left: Math.max(0, DAILY_XID_LIMIT - used),
+    /* The oldest of the batch is the one that ages out first. */
+    nextAt: used >= DAILY_XID_LIMIT ? recent[0] + DAILY_WINDOW_MS : null,
+  };
+}
+export const MAX_SPAN_LABEL = "a year";
 
 /* Presets still speak in fixed strings; this turns one into an editable value. */
 export const durToParts = (d) => {
@@ -366,10 +393,6 @@ export const peopleValue = (cfg) =>
   cfg.oneShot ? "one" : cfg.conn === null ? "any" : String(cfg.conn);
 export const peopleOption = (v) => PEOPLE.find((p) => p.v === v) || PEOPLE[PEOPLE.length - 1];
 
-export const PLAN = {
-  free: { name: "Free", passes: 3, maxDur: "7d", price: "₹0" },
-  pro: { name: "Pro", passes: Infinity, maxDur: "30d", price: "₹99/mo" },
-};
 
 /* ------------------------------------------------------- UI primitives ---- */
 export function Btn({ kind = "primary", size = "md", icon: I, children, style, ...rest }) {
@@ -667,7 +690,7 @@ export function guestClient(code) {
 
 /* ------------------------------------------------------------- demo store -- */
 let mem = null;
-const memory = () => (mem ||= { ...seed(), plan: "free" });
+const memory = () => (mem ||= { ...seed() });
 
 const shape = (x) => ({
   id: x.id, code: x.code, label: x.label, presetId: x.preset,
@@ -721,7 +744,6 @@ export const db = {
     }
 
     const [{ data: prof }, { data: xids }, { data: receipts }] = await Promise.all([
-      sb.from("profiles").select("plan, plan_until").maybeSingle(),
       sb.from("xids").select("*").order("created_at", { ascending: false }),
       sb.from("receipts").select("*").order("ended_at", { ascending: false }).limit(200),
     ]);
@@ -762,9 +784,7 @@ export const db = {
     /* Counted, not assumed. The ledger claims we keep nothing, so it must be
        able to say truthfully when that stops being true. */
     const kept = conns.filter((c) => c.keep_host && c.keep_guest).length;
-    const planActive = prof?.plan === "pro" && (!prof.plan_until || new Date(prof.plan_until) > new Date());
     return {
-      plan: planActive ? "pro" : "free",
       kept,
       xids: out,
       receipts: (receipts ?? []).map((r) => ({
@@ -775,11 +795,11 @@ export const db = {
     };
   },
 
-  async issue(cfg, presetId, plan = "free") {
-    /* Clamp here rather than only in the interface: the ceiling is a billing
-       rule, and billing rules that live only in the UI are not rules. */
+  async issue(cfg, presetId) {
+    /* Clamped in the data layer, not just the interface — a ceiling that exists
+       only in the UI is not a ceiling. */
     const wanted = cfg.durN ? customMs(cfg.durN, cfg.durUnit) : (DUR[cfg.dur] ?? 864e5);
-    const span = Math.min(wanted, planCapMs(plan));
+    const span = Math.min(wanted, MAX_SPAN_MS);
     const expires = Date.now() + span;
     if (!LIVE) {
       const x = {
@@ -800,7 +820,7 @@ export const db = {
       preset: presetId, kind: cfg.type, max_conn: cfg.conn, max_msgs: cfg.msgs,
       hours: cfg.hours, tz: deviceZone(), one_shot: cfg.oneShot, auto_extend: cfg.autoExtend,
       expires_at: new Date(expires).toISOString(),
-      hard_expiry: new Date(Date.now() + Math.min(span * 2, planCapMs(plan) * 2)).toISOString(),
+      hard_expiry: new Date(Date.now() + Math.min(span * 2, MAX_SPAN_MS * 2)).toISOString(),
     }).select().single();
     if (error) throw error;
     return shape(data);
@@ -862,17 +882,20 @@ export const db = {
     if (error) throw new Error(friendly(error));
   },
 
-  async setPlan(plan, days) {
-    if (!LIVE) { memory().plan = plan; return; }
-    const { data: u } = await sb.auth.getUser();
-    await sb.from("profiles").update({
-      plan,
-      plan_until: days ? new Date(Date.now() + days * 864e5).toISOString() : null,
-    }).eq("id", u.user.id);
+  /* Lets a host readmit someone after a one-shot XID has closed. Without it a
+     guest who loses their token on a sealed XID is locked out for good and
+     neither side can fix it. */
+  async unseal(xidId) {
+    if (!LIVE) {
+      const x = memory().xids.find((v) => v.id === xidId);
+      if (x) x.sealed = false;
+      return;
+    }
+    const { error } = await sb.rpc("unseal_xid", { p_id: xidId });
+    if (error) throw new Error(friendly(error));
   },
 
-  /* Realtime is the one thing that costs real money at scale, so it is opened
-     per open chat and closed the moment you leave. Never subscribe globally. */
+  /* Opened per open chat and closed the moment you leave — never globally. */
   watch(xidId, onChange) {
     if (!LIVE) return () => {};
     return poll(onChange);
@@ -1077,6 +1100,7 @@ function friendly(error) {
   if (m.includes("QUIET_HOURS")) return "It's outside the hours this XID accepts messages.";
   if (m.includes("MESSAGE_CAP")) return "This XID has reached its message limit.";
   if (m.includes("RATE_LIMIT")) return "Too many messages too quickly. Slow down and try again.";
+  if (m.includes("DAILY_LIMIT")) return `That's ${DAILY_XID_LIMIT} XIDs in the last 24 hours. End one you're finished with, or try again a little later.`;
   if (m.includes("NOT_A_GUEST")) return "This conversation is no longer open to you.";
   if (m.includes("NOT_SIGNED_IN")) return "Create an account first, then we can keep this for you.";
   if (m.includes("CLAIM_FAILED")) return "This conversation is already linked to an account.";

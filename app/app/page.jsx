@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import {
-  Dashboard, Issue, Ledger, Plans, Chat, ShareSheet, KillConfirm, Auth, Wordmark,
+  Dashboard, Issue, Ledger, Chat, ShareSheet, KillConfirm, Auth, Wordmark,
 } from "@/components/screens";
-import { Btn, Ico, MONO, PLAN, SANS, T, auth, db, useNarrow } from "@/lib/core";
+import { Btn, Ico, MONO, SANS, T, auth, db, useNarrow } from "@/lib/core";
 
 export default function HostApp() {
   const [user, setUser] = useState(undefined); // undefined = still checking
@@ -77,7 +77,6 @@ export default function HostApp() {
   const NAV = [
     { v: "passes", label: "XIDs", icon: Ico.Pass },
     { v: "ledger", label: "Ledger", icon: Ico.Ledger },
-    { v: "plans", label: "Plans", icon: Ico.Bolt },
   ];
 
   return (
@@ -105,16 +104,7 @@ export default function HostApp() {
             </button>
           ))}
           {!narrow && (
-            <div style={{ marginTop: "auto", padding: "14px 10px 4px", borderTop: `1px solid ${T.ruleSoft}` }}>
-              <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: T.faint, marginBottom: 4 }}>
-                {PLAN[state.plan].name} plan
-              </div>
-              <div style={{ fontSize: 12, color: T.mute, lineHeight: 1.45, marginBottom: 9 }}>
-                {state.plan === "free"
-                  ? `${state.xids.filter((x) => x.status === "active").length} of 3 XIDs in use`
-                  : "Unlimited XIDs"}
-              </div>
-              {state.plan === "free" && <Btn size="sm" kind="quiet" style={{ width: "100%", marginBottom: 7 }} onClick={() => go("plans")}>Upgrade</Btn>}
+            <div style={{ marginTop: "auto", paddingTop: 16 }}>
               <button onClick={() => auth.signOut().then(() => setUser(null))}
                 style={{ border: "none", background: "none", color: T.faint, fontFamily: SANS, fontSize: 12, cursor: "pointer", padding: 0 }}>
                 Sign out
@@ -133,7 +123,7 @@ export default function HostApp() {
           {view === "issue" && (
             <Issue state={state} go={go} onIssue={async (cfg, pid) => {
               try {
-                const x = await db.issue(cfg, pid, state.plan);
+                const x = await db.issue(cfg, pid);
                 await refresh();
                 setShare(x);
                 setView("passes");
@@ -141,14 +131,6 @@ export default function HostApp() {
             }} />
           )}
           {view === "ledger" && <Ledger state={state} />}
-          {view === "plans" && (
-            <Plans state={state} go={go} onUpgrade={async (kind) => {
-              await db.setPlan("pro", kind === "day" ? 1 : null);
-              await refresh();
-              flash(kind === "day" ? "Day pass active for 24 hours." : "You're on Pro. Unlimited XIDs.");
-              setView("passes");
-            }} />
-          )}
           {view === "chat" && open && (
             <Chat x={open} go={go} onShare={setShare}
               onSend={act((xid, cid, text) => db.send(xid, cid, text))}
