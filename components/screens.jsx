@@ -233,11 +233,12 @@ export function Issue({ state, go, onIssue }) {
               return (
                 <div style={{ padding: "16px 18px", borderRadius: 11, background: T.amberWash, border: "1px solid #F0DEBE" }}>
                   <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.55, marginBottom: 13 }}>
-                    <strong style={{ fontWeight: 650 }}>That's {DAILY_XID_LIMIT} XIDs in 24 hours.</strong>{" "}
-                    It's a guard against abuse, not a paywall — nothing to buy.{" "}
-                    {q.nextAt && <>You can create another from <strong style={{ fontWeight: 650 }}>{clock(q.nextAt)}</strong>, or end one you're finished with now.</>}
+                    <strong style={{ fontWeight: 650 }}>You've created {DAILY_XID_LIMIT} XIDs in the last 24 hours.</strong>{" "}
+                    A guard against automated abuse, not a paywall — there's nothing to buy.{" "}
+                    {q.nextAt && <>The next slot opens at <strong style={{ fontWeight: 650 }}>{clock(q.nextAt)}</strong>, and one more frees up every time an older one passes 24 hours.</>}{" "}
+                    Ending an XID won't help here — this counts how many you've made, not how many are open.
                   </div>
-                  <Btn kind="quiet" onClick={() => go("passes")}>See your open XIDs</Btn>
+                  <Btn kind="quiet" onClick={() => go("passes")}>Back to your XIDs</Btn>
                 </div>
               );
             }

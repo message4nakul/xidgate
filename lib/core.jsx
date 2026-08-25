@@ -1100,7 +1100,11 @@ function friendly(error) {
   if (m.includes("QUIET_HOURS")) return "It's outside the hours this XID accepts messages.";
   if (m.includes("MESSAGE_CAP")) return "This XID has reached its message limit.";
   if (m.includes("RATE_LIMIT")) return "Too many messages too quickly. Slow down and try again.";
-  if (m.includes("DAILY_LIMIT")) return `That's ${DAILY_XID_LIMIT} XIDs in the last 24 hours. End one you're finished with, or try again a little later.`;
+  /* Deliberately does not suggest ending one. This counts XIDs created, not XIDs
+     open — otherwise create-thirty-delete-thirty would defeat it entirely. The
+     earlier wording was inherited from the old concurrent cap and was simply
+     wrong advice. */
+  if (m.includes("DAILY_LIMIT")) return `That's ${DAILY_XID_LIMIT} XIDs created in the last 24 hours. Ending one won't free a slot — the count is on how many you make, not how many are open. It frees up on its own.`;
   if (m.includes("NOT_A_GUEST")) return "This conversation is no longer open to you.";
   if (m.includes("NOT_SIGNED_IN")) return "Create an account first, then we can keep this for you.";
   if (m.includes("CLAIM_FAILED")) return "This conversation is already linked to an account.";
