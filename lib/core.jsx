@@ -743,7 +743,7 @@ export const db = {
       return m;
     }
 
-    const [{ data: prof }, { data: xids }, { data: receipts }] = await Promise.all([
+    const [{ data: xids }, { data: receipts }] = await Promise.all([
       sb.from("xids").select("*").order("created_at", { ascending: false }),
       sb.from("receipts").select("*").order("ended_at", { ascending: false }).limit(200),
     ]);
