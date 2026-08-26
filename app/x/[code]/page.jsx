@@ -34,7 +34,11 @@ export default function GuestPage() {
   const load = useCallback(async () => {
     const x = await guest.lookup(code);
     setXid(x);
-    if (x && x.status === "active" && guest.hasToken(code)) {
+    /* Load the thread whatever the XID's status. A mutually kept conversation
+       outlives its XID, and the only way to know whether this is one is to look.
+       Gating on "active" meant the check for kept could never pass — the fix for
+       the ended screen was correct and inert. */
+    if (x && guest.hasToken(code)) {
       setThread(await guest.thread(code, x.id));
     }
   }, [code]);
