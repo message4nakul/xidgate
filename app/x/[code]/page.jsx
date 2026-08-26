@@ -97,7 +97,14 @@ export default function GuestPage() {
   /* ------------------------------------------------------------ gone ----- */
   /* The conversion moment. They've just watched something disappear on
      purpose — that's when the idea lands, not before. */
-  if (!xid || xid.status !== "active" || new Date(xid.expires_at) <= new Date()) {
+  /* A conversation the two of you agreed to keep survives the XID, so it must
+     not be shown as gone. The data was always readable — row-level security
+     allows it — but this screen answered "ended" before ever looking, which made
+     mutual keep invisible to the guest and useless as a mutual promise. */
+  const ended = !xid || xid.status !== "active" || new Date(xid.expires_at) <= new Date();
+  const keptOpen = !!thread && thread.keepMe && thread.keepThem;
+
+  if (ended && !keptOpen) {
     return (
       <Shell>
         <Center>
@@ -153,7 +160,9 @@ export default function GuestPage() {
 
   const left = new Date(xid.expires_at).getTime() - Date.now();
   const cd = countdown(left);
-  const open = withinHours(xid.hours, xid.tz);
+  /* An ended-but-kept conversation is read-only: quiet hours are irrelevant
+     because nothing can be sent at all, and the server would reject it anyway. */
+  const open = !ended && withinHours(xid.hours, xid.tz);
 
   /* ------------------------------------------------------------ join ----- */
   if (!thread) {
@@ -310,6 +319,17 @@ export default function GuestPage() {
             <Ico.Check size={16} style={{ color: T.live }} />
             <span style={{ fontSize: 12.5, color: T.live, lineHeight: 1.5 }}>
               Saved. Sign in with that email on any device and this conversation will be here — until the XID ends.
+            </span>
+          </div>
+        )}
+
+        {ended && keptOpen && (
+          <div style={{ padding: "10px 16px", borderTop: `1px solid ${T.ruleSoft}`, background: T.liveWash,
+            display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+            <Ico.Shield size={16} style={{ color: T.live }} />
+            <span style={{ fontSize: 12.5, color: T.live, lineHeight: 1.5, flex: 1, minWidth: 190 }}>
+              <strong style={{ fontWeight: 650 }}>This XID has ended.</strong> You can still read it because you both
+              chose to keep it. No new messages can be sent.
             </span>
           </div>
         )}

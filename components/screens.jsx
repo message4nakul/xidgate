@@ -6,14 +6,34 @@ import { Btn, Chip, DAILY_XID_LIMIT, DUR, DUR_LABEL, Field, HOURS, Ico, MONO, MA
 export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
   const narrow = useNarrow();
   const [q, setQ] = useState("");
+  const [showEnded, setShowEnded] = useState(false);
   const live = state.xids.filter((x) => x.status === "active");
-  const done = state.xids.filter((x) => x.status !== "active");
+
+  /* A conversation both sides agreed to keep outlives its XID, so it needs a
+     home of its own. Without one it sat in the ended list looking like a
+     leftover, next to XIDs whose messages really are gone — which is exactly
+     what made the two screens look inconsistent. */
+  const kept = state.xids
+    .filter((x) => x.status !== "active")
+    .flatMap((x) => x.conversations
+      .filter((c) => c.keepMe && c.keepThem)
+      .map((c) => ({ x, c })));
+  const keptIds = new Set(kept.map((k) => k.x.id));
+
+  /* Ended XIDs with something kept are shown above instead, so nothing appears
+     in two places at once. */
+  const done = state.xids.filter((x) => x.status !== "active" && !keptIds.has(x.id));
   const match = (x) =>
     !q ||
     x.label.toLowerCase().includes(q.toLowerCase()) ||
     x.code.toLowerCase().includes(q.toLowerCase()) ||
     x.conversations.some((c) => c.messages.some((m) => m.text.toLowerCase().includes(q.toLowerCase())));
-  const shown = [...live, ...done].filter(match);
+  const q0 = q.trim();
+  const shownLive = live.filter(match);
+  const shownKept = kept.filter(({ x, c }) => match(x) || c.messages.some((m) => m.text.toLowerCase().includes(q0.toLowerCase())));
+  const shownDone = done.filter(match);
+  /* A match hidden inside a collapsed section is a match the person cannot see. */
+  const endedOpen = showEnded || (q0.length > 0 && shownDone.length > 0);
 
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 1080, margin: "0 auto" }}>
@@ -45,7 +65,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
         </div>
       )}
 
-      {shown.length === 0 ? (
+      {shownLive.length + shownKept.length + shownDone.length === 0 ? (
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 14, padding: "56px 30px", textAlign: "center", background: T.card }}>
           <div style={{ color: T.faint, marginBottom: 14 }}><Ico.Pass size={30} /></div>
           <h3 style={{ margin: "0 0 7px", fontFamily: SANS, fontSize: 18, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>
@@ -57,15 +77,81 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
           {!q && <Btn icon={Ico.Plus} onClick={() => go("issue")}>Create your first XID</Btn>}
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
-          {shown.map((x) => (
-            <Pass key={x.id} x={x}
-              onOpen={() => go("chat", x.id)}
-              onShare={() => onShare(x)}
-              onReopen={onReopen ? () => onReopen(x) : undefined}
-              onKill={() => onKill(x)} />
-          ))}
-        </div>
+        <>
+          {shownLive.length > 0 && (
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
+              {shownLive.map((x) => (
+                <Pass key={x.id} x={x}
+                  onOpen={() => go("chat", x.id)}
+                  onShare={() => onShare(x)}
+                  onReopen={onReopen ? () => onReopen(x) : undefined}
+                  onKill={() => onKill(x)} />
+              ))}
+            </div>
+          )}
+
+          {shownKept.length > 0 && (
+            <div style={{ marginTop: shownLive.length ? 34 : 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 4 }}>
+                <h2 style={{ margin: 0, fontFamily: SANS, fontSize: 17, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>
+                  Kept conversations
+                </h2>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{shownKept.length}</span>
+              </div>
+              <p style={{ margin: "0 0 14px", fontSize: 13, color: T.mute, lineHeight: 1.5, maxWidth: 560 }}>
+                These outlived their XID because you and the other person both agreed to keep them. They stay readable until one of you stops keeping.
+              </p>
+              <div style={{ display: "grid", gap: 9 }}>
+                {shownKept.map(({ x, c }) => (
+                  <button key={c.id} onClick={() => go("chat", x.id)}
+                    style={{ textAlign: "left", cursor: "pointer", background: T.card,
+                      border: `1px solid ${T.rule}`, borderLeft: `3px solid ${T.live}`, borderRadius: 10,
+                      padding: "14px 17px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 650, color: T.ink, letterSpacing: "-0.015em" }}>
+                        {c.guest}
+                      </div>
+                      <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>
+                        {x.label} · {x.code}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: MONO, fontSize: 12, color: T.mute }}>
+                      {c.messages.length} {c.messages.length === 1 ? "message" : "messages"}
+                    </div>
+                    <Chip tone="live">kept</Chip>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {shownDone.length > 0 && (
+            <div style={{ marginTop: (shownLive.length || shownKept.length) ? 34 : 0 }}>
+              <button onClick={() => setShowEnded((v) => !v)}
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none",
+                  cursor: "pointer", padding: 0, marginBottom: endedOpen ? 14 : 0, fontFamily: SANS }}>
+                <span style={{ fontSize: 17, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>Ended</span>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{shownDone.length}</span>
+                <span style={{ fontSize: 12, color: T.faint }}>{endedOpen ? "▲" : "▼"}</span>
+              </button>
+              {endedOpen && (
+                <>
+                  <p style={{ margin: "0 0 14px", fontSize: 13, color: T.mute, lineHeight: 1.5, maxWidth: 560 }}>
+                    The messages in these were deleted when they ended. History keeps the receipt — how many were cleared and when — but not the messages themselves.
+                  </p>
+                  <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
+                    {shownDone.map((x) => (
+                      <Pass key={x.id} x={x} compact
+                        onOpen={() => go("chat", x.id)}
+                        onShare={() => onShare(x)}
+                        onKill={() => onKill(x)} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -356,7 +442,9 @@ export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
           border: `1px solid ${asGuest ? T.signal : T.rule}`, background: asGuest ? T.signalWash : T.card,
           color: asGuest ? T.signalDeep : T.mute, fontFamily: SANS, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
         }}><Ico.Eye size={14} />{asGuest ? "Their view" : "Your view"}</button>
-        {live && cur && cur.messages.length > 0 && (
+        {/* Available for a kept conversation too — being able to read something
+            you cannot save is backwards. */}
+        {cur && cur.messages.length > 0 && (live || (cur.keepMe && cur.keepThem)) && (
           <Btn size="sm" kind="quiet" icon={Ico.Ledger} title="Save your own copy before this ends"
             onClick={() => downloadTranscript(x, cur, "host")}>{narrow ? "Save" : "Save a copy"}</Btn>
         )}
@@ -433,7 +521,10 @@ export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
 
           {/* Mutual keep. Both sides must agree, and the copy is explicitly not
               the default — otherwise "we keep nothing" stops being true. */}
-          {live && cur && !cur.blocked && (
+          {/* Shown after the XID ends as well. Otherwise a conversation you both
+              agreed to keep becomes permanent with no way to undo it — which
+              contradicts the one promise this product makes. */}
+          {cur && !cur.blocked && (live || (cur.keepMe && cur.keepThem)) && (
             <div style={{ padding: "10px 22px", borderTop: `1px solid ${T.ruleSoft}`,
               background: cur.keepMe && cur.keepThem ? T.liveWash : "#FAFBFC" }}>
               {cur.keepMe && cur.keepThem ? (
