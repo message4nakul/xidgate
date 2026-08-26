@@ -237,10 +237,10 @@ export default function GuestPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 650, letterSpacing: "-0.015em", color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{xid.label}</span>
-              <Chip tone={open ? "live" : "warn"}>{open ? "live" : "quiet hours"}</Chip>
+              <Chip tone={ended ? "live" : open ? "live" : "warn"}>{ended ? "kept" : open ? "live" : "quiet hours"}</Chip>
             </div>
             <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.mute, marginTop: 3 }}>
-              ends in {cd.text}
+              {ended ? "ended · kept by you both" : `ends in ${cd.text}`}
             </div>
           </div>
           {thread.messages.length > 0 && (
@@ -258,8 +258,10 @@ export default function GuestPage() {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "10px 13px", borderRadius: 9, background: T.signalWash, border: "1px solid #DCE2FF", color: T.signalDeep, fontSize: 12.5, lineHeight: 1.55, marginBottom: 16 }}>
             <Ico.Shield size={15} />
             <span>
-              <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation closes in {cd.text}.
-              {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours, xid.tz)}.</>}
+              <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours.
+              {ended
+                ? <> This XID has ended, so nothing more can be sent — but you can still read it, and save a copy.</>
+                : <> This conversation closes in {cd.text}.{!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours, xid.tz)}.</>}</>}
             </span>
           </div>
 
