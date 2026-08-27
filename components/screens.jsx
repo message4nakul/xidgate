@@ -7,6 +7,7 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
   const narrow = useNarrow();
   const [q, setQ] = useState("");
   const [showEnded, setShowEnded] = useState(false);
+  const [scope, setScope] = useState("all");
   const live = state.xids.filter((x) => x.status === "active");
 
   /* A conversation both sides agreed to keep outlives its XID, so it needs a
@@ -32,8 +33,24 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
   const shownLive = live.filter(match);
   const shownKept = kept.filter(({ x, c }) => match(x) || c.messages.some((m) => m.text.toLowerCase().includes(q0.toLowerCase())));
   const shownDone = done.filter(match);
-  /* A match hidden inside a collapsed section is a match the person cannot see. */
-  const endedOpen = showEnded || (q0.length > 0 && shownDone.length > 0);
+
+  /* Scope narrows which sections are on screen; the query filters within them.
+     Kept separate on purpose — "show me only ended" and "find the word bike"
+     are different questions and people ask them together. */
+  const inScope = (name) => scope === "all" || scope === name;
+  const SCOPES = [
+    ["all", "All", live.length + kept.length + done.length],
+    ["open", "Open", live.length],
+    ["kept", "Kept", kept.length],
+    ["ended", "Ended", done.length],
+  ].filter(([k, , n]) => k === "all" || n > 0);
+
+  /* A match hidden inside a collapsed section is a match nobody can see. */
+  const endedOpen = showEnded || scope === "ended" || (q0.length > 0 && shownDone.length > 0);
+  const visibleCount =
+    (inScope("open") ? shownLive.length : 0) +
+    (inScope("kept") ? shownKept.length : 0) +
+    (inScope("ended") ? shownDone.length : 0);
 
   return (
     <div style={{ padding: narrow ? "24px 16px 96px" : "34px 32px 64px", maxWidth: 1080, margin: "0 auto" }}>
@@ -59,26 +76,48 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
       {state.xids.length > 2 && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.rule}`, background: T.card, marginBottom: 20, maxWidth: 380 }}>
           <Ico.Search size={15} style={{ color: T.faint }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search XIDs and messages"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search names, codes and message text"
             style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: SANS, fontSize: 13.5, color: T.ink }} />
           {q && <button onClick={() => setQ("")} style={{ border: "none", background: "none", color: T.faint, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>}
         </div>
       )}
 
-      {shownLive.length + shownKept.length + shownDone.length === 0 ? (
+      {(live.length + kept.length + done.length) > 0 && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 18 }}>
+          {SCOPES.map(([k, label, n]) => (
+            <button key={k} onClick={() => setScope(k)}
+              style={{
+                padding: "6px 12px", borderRadius: 999, cursor: "pointer",
+                fontFamily: SANS, fontSize: 12.5, fontWeight: 600,
+                borderWidth: 1, borderStyle: "solid",
+                borderColor: scope === k ? T.signal : T.rule,
+                background: scope === k ? T.signalWash : T.card,
+                color: scope === k ? T.signalDeep : T.mute,
+              }}>
+              {label} <span style={{ fontFamily: MONO, fontSize: 11, opacity: .7 }}>{n}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleCount === 0 ? (
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 14, padding: "56px 30px", textAlign: "center", background: T.card }}>
           <div style={{ color: T.faint, marginBottom: 14 }}><Ico.Pass size={30} /></div>
           <h3 style={{ margin: "0 0 7px", fontFamily: SANS, fontSize: 18, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>
-            {q ? "Nothing matches that" : "No XIDs yet"}
+            {q ? "Nothing matches that" : scope === "kept" ? "No kept conversations" : scope === "ended" ? "Nothing has ended yet" : scope === "open" ? "No open XIDs" : "No XIDs yet"}
           </h3>
           <p style={{ margin: "0 0 18px", fontSize: 13.5, color: T.mute }}>
-            {q ? "Try a different word, or clear the search." : "Selling something? Meeting someone? Start there."}
+            {q
+              ? (scope === "all" ? "Try a different word, or clear the search." : `Nothing in ${scope} matches. Try All, or a different word.`)
+              : scope === "kept" ? "A conversation appears here when you and the other person both choose to keep it."
+              : scope === "ended" ? "XIDs move here when they run out or you end them."
+              : "Selling something? Meeting someone? Start there."}
           </p>
           {!q && <Btn icon={Ico.Plus} onClick={() => go("issue")}>Create your first XID</Btn>}
         </div>
       ) : (
         <>
-          {shownLive.length > 0 && (
+          {inScope("open") && shownLive.length > 0 && (
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
               {shownLive.map((x) => (
                 <Pass key={x.id} x={x}
@@ -90,13 +129,13 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
             </div>
           )}
 
-          {shownKept.length > 0 && (
-            <div style={{ marginTop: shownLive.length ? 34 : 0 }}>
+          {inScope("kept") && shownKept.length > 0 && (
+            <div style={{ marginTop: (inScope("open") && shownLive.length) ? 34 : 0 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 4 }}>
                 <h2 style={{ margin: 0, fontFamily: SANS, fontSize: 17, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>
                   Kept conversations
                 </h2>
-                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{shownKept.length}</span>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{q0 ? `${shownKept.length} of ${kept.length}` : shownKept.length}</span>
               </div>
               <p style={{ margin: "0 0 14px", fontSize: 13, color: T.mute, lineHeight: 1.5, maxWidth: 560 }}>
                 These outlived their XID because you and the other person both agreed to keep them. They stay readable until one of you stops keeping.
@@ -125,19 +164,20 @@ export function Dashboard({ state, go, onKill, onKillAll, onShare, onReopen }) {
             </div>
           )}
 
-          {shownDone.length > 0 && (
-            <div style={{ marginTop: (shownLive.length || shownKept.length) ? 34 : 0 }}>
+          {inScope("ended") && shownDone.length > 0 && (
+            <div style={{ marginTop: ((inScope("open") && shownLive.length) || (inScope("kept") && shownKept.length)) ? 34 : 0 }}>
               <button onClick={() => setShowEnded((v) => !v)}
                 style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none",
                   cursor: "pointer", padding: 0, marginBottom: endedOpen ? 14 : 0, fontFamily: SANS }}>
                 <span style={{ fontSize: 17, fontWeight: 650, color: T.ink, letterSpacing: "-0.02em" }}>Ended</span>
-                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{shownDone.length}</span>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: T.faint }}>{q0 ? `${shownDone.length} of ${done.length}` : shownDone.length}</span>
                 <span style={{ fontSize: 12, color: T.faint }}>{endedOpen ? "▲" : "▼"}</span>
               </button>
               {endedOpen && (
                 <>
                   <p style={{ margin: "0 0 14px", fontSize: 13, color: T.mute, lineHeight: 1.5, maxWidth: 560 }}>
                     The messages in these were deleted when they ended. History keeps the receipt — how many were cleared and when — but not the messages themselves.
+                    {q0 && <> Which means searching words from a conversation won't find anything here; only names, codes and dates can match.</>}
                   </p>
                   <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" }}>
                     {shownDone.map((x) => (
