@@ -130,7 +130,34 @@ export const HOURS = [
   { v: "18-22", label: "Evenings · 6pm–10pm", range: [18, 22] },
   { v: "8-12", label: "Mornings · 8am–12pm", range: [8, 12] },
 ];
-export const hoursMeta = (v) => HOURS.find((h) => h.v === v) || HOURS[0];
+/* Parse the window, don't look it up.
+
+   The server does string_to_array(hours,'-')::int[] and will enforce whatever it
+   finds. This table only supplies friendly labels for the presets. Any value the
+   table did not know used to fall through to HOURS[0] — "Any time" — so the
+   interface said "open" while the server refused the message. It failed in the
+   one direction that matters, and it would have gone live the moment a sixth
+   option or a free-text field appeared.
+
+   "invalid" is deliberate rather than a null: on a malformed value the server's
+   integer cast throws and the message is rejected, so the honest answer here is
+   closed, not open. */
+export function hoursRange(v) {
+  if (!v || v === "any") return null;
+  const m = String(v).match(/^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/);
+  return m ? [Number(m[1]), Number(m[2])] : "invalid";
+}
+
+const hour12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+
+export const hoursMeta = (v) => {
+  const known = HOURS.find((h) => h.v === v);
+  if (known) return known;
+  const r = hoursRange(v);
+  /* An unrecognised but well-formed window still deserves a readable label. */
+  if (Array.isArray(r)) return { v, label: `${hour12(r[0])}–${hour12(r[1])}`, range: r };
+  return HOURS[0];
+};
 /* The hour is read in the XID's own zone, not the viewer's.
 
    These used to call Date.getHours(), which answers in whatever zone the device
@@ -166,14 +193,16 @@ export function zoneLabel(tz) {
 }
 
 export function withinHours(v, tz, at = new Date()) {
-  const r = hoursMeta(v).range;
-  if (!r) return true;
+  const r = hoursRange(v);
+  if (r === null) return true;
+  if (r === "invalid") return false;      // server would reject; say so
   const h = hourIn(tz, at);
+  /* Same arithmetic as the trigger, including windows that wrap past midnight. */
   return r[0] <= r[1] ? h >= r[0] && h < r[1] : h >= r[0] || h < r[1];
 }
 export function nextOpen(v, tz) {
-  const r = hoursMeta(v).range;
-  if (!r) return null;
+  const r = hoursRange(v);
+  if (!Array.isArray(r)) return null;
   const h = hourIn(tz);
   const when = `${r[0] % 12 || 12}${r[0] < 12 ? "am" : "pm"}`;
   const zone = zoneLabel(tz);

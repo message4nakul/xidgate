@@ -261,7 +261,9 @@ export default function GuestPage() {
               <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours.
               {ended
                 ? <> This XID has ended, so nothing more can be sent — but you can still read it, and save a copy.</>
-                : <> This conversation closes in {cd.text}.{!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours, xid.tz)}.</>}</>}
+                : <> This conversation closes in {cd.text}.{!open && (nextOpen(xid.hours, xid.tz)
+                  ? <> Right now it's outside their hours — you can read but not send until {nextOpen(xid.hours, xid.tz)}.</>
+                  : <> Right now it's outside the hours they accept messages.</>)}</>}
             </span>
           </div>
 
@@ -378,7 +380,7 @@ export default function GuestPage() {
 
         {thread.blocked || !open ? (
           <div style={{ padding: "15px 16px", borderTop: `1px solid ${T.ruleSoft}`, textAlign: "center", fontSize: 13, color: T.mute }}>
-            {thread.blocked ? "You can't send messages on this XID." : `Quiet hours. You can send again from ${nextOpen(xid.hours, xid.tz)}.`}
+            {thread.blocked ? "You can't send messages on this XID." : nextOpen(xid.hours, xid.tz) ? `Quiet hours. You can send again from ${nextOpen(xid.hours, xid.tz)}.` : "Outside the hours they accept messages."}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 9, padding: narrow ? "10px 14px" : "12px 20px", paddingBottom: `max(${narrow ? 10 : 12}px, env(safe-area-inset-bottom))`, borderTop: `1px solid ${T.ruleSoft}`, alignItems: "center" }}>

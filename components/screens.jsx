@@ -607,7 +607,7 @@ export function Chat({ x, go, onSend, onKill, onBlock, onShare, onKeep }) {
               <span>
                 {cur?.blocked ? (asGuest ? "You can't send anything on this XID." : "You blocked this person. They can't send anything.") :
                   !live ? "This XID has ended. Nothing here can be recovered." :
-                    `Quiet hours. Messages reopen at ${nextOpen(x.hours, x.tz)}.`}
+                    nextOpen(x.hours, x.tz) ? `Quiet hours. Messages reopen at ${nextOpen(x.hours, x.tz)}.` : "Outside the hours this XID accepts messages."}
               </span>
               {cur?.blocked && live && !asGuest && (
                 <Btn size="sm" kind="quiet" icon={Ico.Check} onClick={() => onBlock(x.id, cur.id)}>Unblock</Btn>
@@ -658,7 +658,9 @@ export function Banner({ x, asGuest, live, open, cur }) {
       <Ico.Shield size={15} />
       <span>
         <strong style={{ fontWeight: 650 }}>You're messaging through XIDgate.</strong> You don't have their number or email, and they don't have yours. This conversation ends in {countdown(x.expiresAt - Date.now()).text}.
-        {!open && <> Right now it's outside their hours — you can read but not send until {nextOpen(x.hours, x.tz)}.</>}
+        {!open && (nextOpen(x.hours, x.tz)
+          ? <> Right now it's outside their hours — you can read but not send until {nextOpen(x.hours, x.tz)}.</>
+          : <> Right now it's outside the hours they accept messages.</>)}
       </span>
     </div>
   );
