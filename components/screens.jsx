@@ -680,22 +680,39 @@ export function Banner({ x, asGuest, live, open, cur }) {
 /* The trust artifact. "It's really gone" is the entire promise, so it needs
    evidence. Receipts hold counts and timestamps — never content. One tiny row
    per dead pass, which is also why this costs nothing to keep forever.       */
-export function Ledger({ state }) {
+export function Ledger({ state, go }) {
   const narrow = useNarrow();
   const [q, setQ] = useState("");
   const all = [...state.receipts].sort((a, b) => b.ended - a.ended);
   const total = all.reduce((n, r) => n + r.destroyed, 0);
 
-  /* Receipts hold no message content, so search runs over what does exist:
-     the label you gave the pass, its code, and why it ended. Searching the
-     conversations themselves would require having kept them. */
+  /* Which records still have a conversation behind them.
+
+     Derived rather than stored. For a kept conversation the connection survives,
+     so the guest's name is already loaded — and for a destroyed one those names
+     were deleted, which is exactly why they should stay unfindable. Copying them
+     onto the record would have made "we keep the counts, not the messages" less
+     true for no gain. */
+  const keptByCode = new Map();
+  for (const x of state.xids) {
+    const convs = x.conversations.filter((c) => c.keepMe && c.keepThem);
+    if (convs.length) keptByCode.set(x.code, { xid: x, convs });
+  }
+
+  /* Records hold no message content, so search runs over what does exist: the
+     name you gave the XID, its code, why it ended, the date — and, where a
+     conversation was kept, who you were talking to. That last one is usually
+     what a person actually remembers. */
   const needle = q.trim().toLowerCase();
+  const guestsFor = (code) =>
+    (keptByCode.get(code)?.convs || []).map((c) => c.guest).join(", ");
   const rs = needle
     ? all.filter((r) =>
         r.label.toLowerCase().includes(needle) ||
         r.code.toLowerCase().includes(needle) ||
         r.reason.toLowerCase().includes(needle) ||
-        stampDate(r.ended).toLowerCase().includes(needle))
+        stampDate(r.ended).toLowerCase().includes(needle) ||
+        guestsFor(r.code).toLowerCase().includes(needle))
     : all;
 
   return (
@@ -718,7 +735,7 @@ export function Ledger({ state }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 13px", borderRadius: 8, border: `1px solid ${T.rule}`, background: T.card, marginBottom: 16, maxWidth: 420 }}>
           <Ico.Search size={15} style={{ color: T.faint }} />
           <input value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, code, date or reason"
+            placeholder="Search by name, code, date, reason or who you spoke to"
             style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontFamily: SANS, fontSize: 13.5, color: T.ink, minWidth: 0 }} />
           {q && (
             <button onClick={() => setQ("")} aria-label="Clear search"
@@ -736,24 +753,47 @@ export function Ledger({ state }) {
       {rs.length === 0 ? (
         <div style={{ border: `1px dashed ${T.rule}`, borderRadius: 12, padding: "44px 24px", textAlign: "center", color: T.mute, fontSize: 13.5, background: T.card }}>
           {needle
-            ? <>Nothing matches “{q}”. Records only hold the XID name, code, date and reason — not the messages.</>
+            ? <>Nothing matches “{q}”. Records hold the XID name, code, date and reason — plus who you spoke to, but only where you both kept the conversation. Names from cleared conversations were deleted with them.</>
             : "Nothing here yet. Records appear when an XID ends."}
         </div>
       ) : (
         <div style={{ display: "grid", gap: 9 }}>
-          {rs.map((r) => (
-            <div key={r.id} style={{ background: T.card, border: `1px solid ${T.rule}`, borderRadius: 10, padding: "15px 18px", display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 190 }}>
-                <div style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 650, color: T.ink, letterSpacing: "-0.015em" }}>{r.label}</div>
-                <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>{r.code} · issued {stampDate(r.issued)}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: MONO, fontSize: 12.5, color: T.ink }}>{r.destroyed} messages · {r.connections} {r.connections === 1 ? "person" : "people"}</div>
-                <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>{r.reason} · {stampDate(r.ended)}</div>
-              </div>
-              <Chip tone="dead">cleared</Chip>
-            </div>
-          ))}
+          {rs.map((r) => {
+            const k = keptByCode.get(r.code);
+            const names = guestsFor(r.code);
+            /* A kept record is a door, not a tombstone — clicking it opens the
+               conversation it still refers to. */
+            const Row = k ? "button" : "div";
+            return (
+              <Row key={r.id}
+                onClick={k && go ? () => go("chat", k.xid.id) : undefined}
+                style={{
+                  textAlign: "left", width: "100%", font: "inherit",
+                  cursor: k && go ? "pointer" : "default",
+                  background: T.card,
+                  border: `1px solid ${T.rule}`,
+                  borderLeft: k ? `3px solid ${T.live}` : `1px solid ${T.rule}`,
+                  borderRadius: 10, padding: "15px 18px",
+                  display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap",
+                }}>
+                <div style={{ flex: 1, minWidth: 190 }}>
+                  <div style={{ fontFamily: SANS, fontSize: 14.5, fontWeight: 650, color: T.ink, letterSpacing: "-0.015em" }}>{r.label}</div>
+                  <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>
+                    {r.code} · issued {stampDate(r.issued)}{names && <> · with {names}</>}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: MONO, fontSize: 12.5, color: T.ink }}>
+                    {k
+                      ? <>kept by agreement · {k.convs.reduce((n, c) => n + c.messages.length, 0)} {k.convs.reduce((n, c) => n + c.messages.length, 0) === 1 ? "message" : "messages"}</>
+                      : <>{r.destroyed} {r.destroyed === 1 ? "message" : "messages"} · {r.connections} {r.connections === 1 ? "person" : "people"}</>}
+                  </div>
+                  <div style={{ fontFamily: MONO, fontSize: 10.5, color: T.faint, marginTop: 3 }}>{r.reason} · {stampDate(r.ended)}</div>
+                </div>
+                <Chip tone={k ? "live" : "dead"}>{k ? "kept" : "cleared"}</Chip>
+              </Row>
+            );
+          })}
         </div>
       )}
     </div>

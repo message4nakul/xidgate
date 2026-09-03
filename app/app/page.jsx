@@ -130,7 +130,7 @@ export default function HostApp() {
               } catch (e) { flash(e.message || "Couldn't create that XID."); }
             }} />
           )}
-          {view === "ledger" && <Ledger state={state} />}
+          {view === "ledger" && <Ledger state={state} go={go} />}
           {view === "chat" && open && (
             <Chat x={open} go={go} onShare={setShare}
               onSend={act((xid, cid, text) => db.send(xid, cid, text))}
