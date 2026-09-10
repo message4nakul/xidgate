@@ -964,6 +964,58 @@ function poll(onTick) {
   };
 }
 
+/* ------------------------------------------------------------------ host -- */
+
+/* A property owner replying without an account.
+
+   The listing site authenticates them with its own login and shows them this
+   link; the token in the URL is the whole credential, so it carries the same 192
+   bits as a guest token. Read and reply only — ending an XID stays with the site
+   through the API, which keeps this page small and keeps destructive actions in
+   one place. */
+export const host = {
+  async view(token) {
+    if (!LIVE) return null;
+    const { data, error } = await sb.rpc("host_view", { p_token: token });
+    if (error) throw new Error(friendly(error));
+    const rows = data ?? [];
+    if (!rows.length) return null;
+    const head = rows[0];
+    /* One flat join comes back; fold it into conversations. */
+    const byConn = new Map();
+    for (const r of rows) {
+      if (!r.conn_id) continue;
+      if (!byConn.has(r.conn_id)) {
+        byConn.set(r.conn_id, { id: r.conn_id, guest: r.guest_label, blocked: r.blocked, messages: [] });
+      }
+      if (r.msg_id) {
+        byConn.get(r.conn_id).messages.push({
+          id: r.msg_id, side: r.from_host ? "me" : "them",
+          text: r.body, ts: new Date(r.sent_at).getTime(),
+        });
+      }
+    }
+    return {
+      code: head.code, label: head.label, status: head.status,
+      expiresAt: new Date(head.expires_at).getTime(),
+      hours: head.hours, tz: head.tz,
+      conversations: [...byConn.values()],
+    };
+  },
+
+  async send(token, connId, body) {
+    if (!LIVE) return;
+    const { error } = await sb.rpc("host_send", { p_token: token, p_conn: connId, p_body: body });
+    if (error) throw new Error(friendly(error));
+  },
+
+  /* Polled, for the same reason the rest of the app polls. */
+  watch(onTick) {
+    if (!LIVE) return () => {};
+    return poll(onTick);
+  },
+};
+
 /* ----------------------------------------------------------------- guest -- */
 export const guest = {
   hasToken(code) {

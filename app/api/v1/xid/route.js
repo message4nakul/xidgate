@@ -12,7 +12,8 @@ import { bearer, rpc, fail } from "../_lib";
 */
 export async function POST(req) {
   const key = bearer(req);
-  if (!key) return fail("NO_KEY", "Missing Authorization header. Send: Authorization: Bearer xg_live_...");
+  if (key === null) return fail("NO_KEY", "Missing Authorization header. Send: Authorization: Bearer xg_live_...");
+  if (key === false) return fail("BAD_KEY", "That API key is not recognised.");
 
   let body = {};
   try { body = await req.json(); } catch { /* an empty body is fine */ }
@@ -40,6 +41,10 @@ export async function POST(req) {
   return Response.json({
     code: row.code,
     url: row.url,
+    /* Deliver this to the listing owner behind your own login. It is the whole
+       credential for replying, so treat it like a password reset link: private,
+       and never in a page a third party can see. */
+    host_url: row.host_url,
     expires_at: row.expires_at,
     ends_in_ms: row.ends_in_ms,
   }, { status: 201, headers: { "Cache-Control": "no-store" } });
@@ -49,7 +54,7 @@ export async function GET() {
   return Response.json({
     service: "XIDgate API v1",
     endpoints: {
-      "POST /api/v1/xid": "mint an XID, returns a shareable url",
+      "POST /api/v1/xid": "mint an XID; returns url for the enquirer and host_url for the owner",
       "GET /api/v1/xid/{code}": "status, expiry, how many joined, message count",
       "DELETE /api/v1/xid/{code}": "end it now",
     },

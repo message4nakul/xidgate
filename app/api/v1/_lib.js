@@ -25,10 +25,17 @@ export function fail(code, message, extra) {
   return Response.json({ error: code, message, ...(extra || {}) }, { status: (ERRORS[code] || [400])[0] });
 }
 
+/* A key is xg_live_ plus base64url. Checking the shape here means a malformed or
+   absent key costs a string comparison instead of a database round trip, which
+   is the whole of the cheap-flood vector. It reveals nothing: the format is
+   public, and a correctly shaped wrong key still fails upstream. */
+const KEY_SHAPE = /^xg_live_[A-Za-z0-9_-]{40,50}$/;
+
 export function bearer(req) {
   const h = req.headers.get("authorization") || "";
   const m = h.match(/^Bearer\s+(\S+)$/i);
-  return m ? m[1] : null;
+  if (!m) return null;
+  return KEY_SHAPE.test(m[1]) ? m[1] : false;   // false = present but malformed
 }
 
 export async function rpc(name, args) {
