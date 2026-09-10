@@ -935,18 +935,40 @@ export function Auth({ onIn }) {
   );
 }
 
+/* The mark is a draining ring: a pass with time running out on it.
+
+   It replaces a white X in a dark rounded square, which was close enough to the
+   X app icon to read as a knock-off on a phone home screen — and the letter was
+   redundant anyway, since the name says XID in text.
+
+   The gap is large on purpose. A thin arc with a small gap reads as a loading
+   spinner — the first version did, unmistakably. A wide, obviously deliberate
+   opening reads as a ring that can be broken, which is the point. */
+export function XMark({ size = 26, light }) {
+  const r = size * 0.30;
+  const c = size / 2;
+  const circ = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true"
+      style={{ display: "block", flexShrink: 0 }}>
+      <rect width={size} height={size} rx={size * 0.22} fill={light ? "#fff" : T.ink} />
+      <circle cx={c} cy={c} r={r} fill="none" stroke={T.signal}
+        strokeWidth={size * 0.150} strokeLinecap="round"
+        strokeDasharray={`${circ * 0.62} ${circ * 0.38}`}
+        transform={`rotate(-90 ${c} ${c})`} />
+    </svg>
+  );
+}
+
 export function Wordmark({ light }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26,
-        borderRadius: 6, background: light ? "#fff" : T.ink, color: light ? T.ink : "#fff",
-        fontFamily: MONO, fontSize: 13, fontWeight: 600, letterSpacing: "-0.04em",
-      }}>X</span>
+      <XMark size={26} light={light} />
       <span style={{ fontFamily: SANS, fontSize: 16.5, fontWeight: 700, letterSpacing: "-0.035em", color: light ? "#fff" : T.ink }}>
         XIDgate
       </span>
     </div>
   );
 }
+
 
