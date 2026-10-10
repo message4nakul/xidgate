@@ -15,16 +15,37 @@ export async function POST(req) {
   if (key === null) return fail("NO_KEY", "Missing Authorization header. Send: Authorization: Bearer xg_live_...");
   if (key === false) return fail("BAD_KEY", "That API key is not recognised.");
 
+  /* An empty body is fine and means "all defaults". Malformed JSON is not: it is
+     a bug in the caller, and silently creating a default XID burns their quota
+     and hides the mistake. */
   let body = {};
-  try { body = await req.json(); } catch { /* an empty body is fine */ }
+  const raw = await req.text();
+  if (raw.trim()) {
+    try { body = JSON.parse(raw); } catch {
+      return Response.json({ error: "BAD_BODY", message: "Request body is not valid JSON." }, { status: 400 });
+    }
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
+      return Response.json({ error: "BAD_BODY", message: "Request body must be a JSON object." }, { status: 400 });
+    }
+  }
 
   const ttl = Number(body.ttl_ms);
   const people = body.people === null || body.people === undefined ? null : Number(body.people);
   if (people !== null && (!Number.isInteger(people) || people < 1)) {
     return Response.json({ error: "BAD_PEOPLE", message: "people must be a whole number of 1 or more, or null for no limit." }, { status: 400 });
   }
-  if (body.hours && body.hours !== "any" && !/^\d{1,2}-\d{1,2}$/.test(body.hours)) {
-    return Response.json({ error: "BAD_HOURS", message: 'hours must be "any" or a 24-hour window like "9-18".' }, { status: 400 });
+  /* The shape check alone let "25-99" through, which creates an XID the trigger
+     can never match: the enquirer can read but never send, forever, with no error
+     anywhere. A lister typing their own hours would hit it eventually. */
+  if (body.hours && body.hours !== "any") {
+    const w = /^(\d{1,2})-(\d{1,2})$/.exec(body.hours);
+    const a = w && Number(w[1]), b = w && Number(w[2]);
+    if (!w || a > 23 || b > 24 || a === b) {
+      return Response.json({
+        error: "BAD_HOURS",
+        message: 'hours must be "any", or a window like "9-18" with a start of 0-23 and an end of 0-24. "22-6" wraps past midnight. Start and end cannot be equal.',
+      }, { status: 400 });
+    }
   }
 
   const { row, error } = await rpc("api_create_xid", {
