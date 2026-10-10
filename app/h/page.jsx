@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Wordmark } from "@/components/screens";
-import { Btn, Chip, Ico, MONO, SANS, T, clock, countdown, host,
+import { Btn, Chip, Ico, MONO, SANS, T, clock, countdown, downloadTranscript, host,
          nextOpen, useNarrow, withinHours } from "@/lib/core";
 
 /* =============================================================================
@@ -114,6 +114,17 @@ export default function HostReply() {
               {live ? `ends in ${cd.text}` : "this conversation has ended"}
             </div>
           </div>
+          {/* The owner has no account, so this page is their only chance to keep a
+              record. Without it the party most likely to need one — the agreed
+              rent, the viewing time — loses it permanently when the XID ends. */}
+          {cur && cur.messages.length > 0 && (
+            <Btn size="sm" kind="quiet" icon={Ico.Ledger} title="Save your own copy before this ends"
+              onClick={() => downloadTranscript(
+                { label: xid.label, code: xid.code, createdAt: Date.now(), expiresAt: xid.expiresAt },
+                { guest: cur.guest, messages: cur.messages }, "host")}>
+              {narrow ? "Save" : "Save a copy"}
+            </Btn>
+          )}
           <Wordmark />
         </header>
 
