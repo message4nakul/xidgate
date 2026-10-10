@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { Wordmark } from "@/components/screens";
 import { Btn, Chip, Ico, MONO, SANS, T, clock, countdown, downloadTranscript, host,
-         nextOpen, useNarrow, withinHours } from "@/lib/core";
+         isOffline, nextOpen, useNarrow, withinHours } from "@/lib/core";
 
 /* =============================================================================
    /h#<token> — the reply side of an XID minted through the API.
@@ -41,11 +41,31 @@ export default function HostReply() {
     return () => window.removeEventListener("hashchange", read);
   }, []);
 
+  const [offline, setOffline] = useState(false);
+
+  /* A failed poll must never blank a conversation that is already on screen.
+     This used to set xid to null on any error, so losing wifi for one tick told
+     the lister their link was invalid — the single most alarming thing this page
+     could say, and untrue. */
   const load = useCallback(async () => {
     if (!token) return;
-    try { setXid(await host.view(token)); }
-    catch (e) { setErr(e.message); setXid(null); }
+    try {
+      const v = await host.view(token);
+      setXid(v); setOffline(false); setErr(null);
+    } catch (e) {
+      if (isOffline(e)) { setOffline(true); return; }
+      setErr(e.message);
+      setXid((prev) => (prev ? prev : null));
+    }
   }, [token]);
+
+  /* Coming back online should feel instant, not up to one poll later. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const back = () => load();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, [load]);
 
   useEffect(() => { if (token) load(); }, [token, load]);
   useEffect(() => { if (xid) return host.watch(load); }, [!!xid, load]);
@@ -53,6 +73,24 @@ export default function HostReply() {
   const cur = xid?.conversations.find((c) => c.id === cid) || xid?.conversations[0];
   useEffect(() => { if (cur && cid !== cur.id) setCid(cur.id); }, [cur, cid]);
   useEffect(() => { foot.current?.scrollIntoView({ behavior: "smooth" }); }, [cur?.messages.length]);
+
+  /* Offline before anything loaded is a connection problem, not a dead link. */
+  if (offline && xid === undefined) {
+    return (
+      <main style={{ minHeight: "100dvh", background: T.paper, display: "grid", placeItems: "center", padding: 24 }}>
+        <div style={{ maxWidth: 400, textAlign: "center" }}>
+          <div style={{ color: T.faint, marginBottom: 14 }}><Ico.Bolt size={28} /></div>
+          <h1 style={{ margin: "0 0 8px", fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>
+            Can&rsquo;t reach XIDgate
+          </h1>
+          <p style={{ margin: "0 0 16px", fontSize: 14, color: T.mute, lineHeight: 1.6 }}>
+            Your link is fine. Check your connection and this will pick up on its own.
+          </p>
+          <Btn onClick={load}>Try again</Btn>
+        </div>
+      </main>
+    );
+  }
 
   if (token === undefined || (token && xid === undefined)) {
     return (
@@ -130,6 +168,11 @@ export default function HostReply() {
 
         <div style={{ background: T.card, border: `1px solid ${T.rule}`, borderRadius: 13, overflow: "hidden" }}>
 
+          {offline && (
+            <div role="status" style={{ padding: "9px 16px", borderBottom: `1px solid ${T.ruleSoft}`, background: T.amberWash, fontSize: 12.5, color: T.stamp, lineHeight: 1.5 }}>
+              Offline &mdash; showing the last messages received. Your link is still valid and this will catch up by itself.
+            </div>
+          )}
           <div style={{ padding: "11px 16px", borderBottom: `1px solid ${T.ruleSoft}`, background: T.signalWash, fontSize: 12.5, color: T.signalDeep, lineHeight: 1.5 }}>
             <strong style={{ fontWeight: 650 }}>You&rsquo;re replying through XIDgate.</strong>{" "}
             They don&rsquo;t have your number or email, and you don&rsquo;t have theirs.{" "}

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Wordmark } from "@/components/screens";
-import { Btn, Chip, Field, Ico, MONO, SANS, T, auth, clock, countdown, downloadTranscript, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
+import { isOffline, Btn, Chip, Field, Ico, MONO, SANS, T, auth, clock, countdown, downloadTranscript, guest, hoursMeta, nextOpen, selectStyle, useNarrow, withinHours } from "@/lib/core";
 
 /* =============================================================================
    This is the page a stranger lands on, and it is the most important screen in
@@ -31,17 +31,32 @@ export default function GuestPage() {
   const endRef = useRef(null);
   const narrow = useNarrow();
 
+  const [offline, setOffline] = useState(false);
+
+  /* lookup() now throws on a transport failure instead of returning null, so a
+     dropped connection no longer reads as a destroyed XID. Whatever is already
+     on screen stays there. */
   const load = useCallback(async () => {
-    const x = await guest.lookup(code);
+    let x;
+    try { x = await guest.lookup(code); setOffline(false); }
+    catch (e) { if (isOffline(e)) { setOffline(true); return; } throw e; }
     setXid(x);
     /* Load the thread whatever the XID's status. A mutually kept conversation
        outlives its XID, and the only way to know whether this is one is to look.
        Gating on "active" meant the check for kept could never pass — the fix for
        the ended screen was correct and inert. */
     if (x && guest.hasToken(code)) {
-      setThread(await guest.thread(code, x.id));
+      try { setThread(await guest.thread(code, x.id)); }
+      catch (e) { if (isOffline(e)) { setOffline(true); return; } throw e; }
     }
   }, [code]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const back = () => load();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 1000); return () => clearInterval(t); }, []);
@@ -96,6 +111,21 @@ export default function GuestPage() {
     setKBusy(false);
   };
 
+  if (offline && xid === undefined) return (
+    <Shell><Center>
+      <div style={{ maxWidth: 400, textAlign: "center" }}>
+        <div style={{ color: T.faint, marginBottom: 14 }}><Ico.Bolt size={28} /></div>
+        <h1 style={{ margin: "0 0 8px", fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>
+          Can&rsquo;t reach XIDgate
+        </h1>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: T.mute, lineHeight: 1.6 }}>
+          This link is fine. Check your connection and it will pick up on its own.
+        </p>
+        <Btn onClick={load}>Try again</Btn>
+      </div>
+    </Center></Shell>
+  );
+
   if (xid === undefined) return <Shell><Center><span style={{ fontFamily: MONO, fontSize: 12, color: T.faint }}>Opening…</span></Center></Shell>;
 
   /* ------------------------------------------------------------ gone ----- */
@@ -105,7 +135,9 @@ export default function GuestPage() {
      not be shown as gone. The data was always readable — row-level security
      allows it — but this screen answered "ended" before ever looking, which made
      mutual keep invisible to the guest and useless as a mutual promise. */
-  const ended = !xid || xid.status !== "active" || new Date(xid.expires_at) <= new Date();
+  /* Offline is not ended. Showing the destruction screen to someone whose
+     connection blinked is the worst lie this page can tell. */
+  const ended = !offline && (!xid || xid.status !== "active" || new Date(xid.expires_at) <= new Date());
   const keptOpen = !!thread && thread.keepMe && thread.keepThem;
 
   if (ended && !keptOpen) {

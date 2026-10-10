@@ -1031,7 +1031,12 @@ export const guest = {
        session and no guest token, so no row-level policy can match them — the
        view returned nothing and every shared pass rendered as deactivated.
        Widening the policy instead would let anyone list every live pass. */
-    const { data, error } = await sb.rpc("xid_by_code", { p_code: code });
+    let data, error;
+    try { ({ data, error } = await sb.rpc("xid_by_code", { p_code: code })); }
+    catch (e) { throw offlineError(e); }
+    /* A transport failure means we never got an answer. Returning null here is
+       what made a wifi blip look like a destroyed XID. */
+    if (error && isOffline(error)) throw offlineError(error);
     if (error) return null;
     const row = Array.isArray(data) ? data[0] : data;
     return row ?? null;
@@ -1173,6 +1178,33 @@ export function downloadTranscript(x, conv, whoAmI) {
 
 /* The database raises named errors so the interface can explain what happened
    instead of showing a stack trace. Keep these in sync with schema.sql. */
+/* A dropped connection is not a verdict about the XID.
+
+   lookup() used to return null for any failure, so the guest page could not tell
+   "no such XID" from "could not reach the server" and showed the destruction
+   screen to someone whose wifi blinked. That is the worst possible lie for this
+   product: the entire promise is that a link is trustworthy until it ends.
+
+   Transient failures are now raised as an Error carrying .offline, and every
+   caller keeps whatever it already had on screen. */
+export function isOffline(e) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  if (e && e.offline) return true;
+  const m = String(e?.message ?? e).toLowerCase();
+  return m.includes("failed to fetch") || m.includes("load failed") ||
+         m.includes("networkerror") || m.includes("network request failed") ||
+         m.includes("err_internet") || m.includes("err_network") ||
+         m.includes("connection") || m.includes("offline") ||
+         m.includes("timeout") || m.includes("timed out") || m.includes("aborted");
+}
+
+function offlineError(e) {
+  const err = new Error("Can't reach XIDgate right now.");
+  err.offline = true;
+  err.cause = e;
+  return err;
+}
+
 function friendly(error) {
   const m = String(error?.message ?? error);
   if (m.includes("XID_CLOSED")) return "This XID has ended. Nothing here can be reopened.";
