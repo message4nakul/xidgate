@@ -31,7 +31,7 @@ const nextConfig = {
      here. Next serves public/quiz.html at /quiz.html only, so without this the
      clean URL 404s. */
   async rewrites() {
-    return [{ source: "/quiz", destination: "/xidgate-quiz.html" }];
+    return [{ source: "/quiz", destination: "/quiz.html" }];
   },
 
   async headers() {
