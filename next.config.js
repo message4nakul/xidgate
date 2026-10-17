@@ -26,6 +26,14 @@ const csp = [
 
 const nextConfig = {
   typescript: { ignoreBuildErrors: true },
+
+  /* Static pages that are not part of the app live in public/ and are routed
+     here. Next serves public/quiz.html at /quiz.html only, so without this the
+     clean URL 404s. */
+  async rewrites() {
+    return [{ source: "/quiz", destination: "/quiz.html" }];
+  },
+
   async headers() {
     return [{
       source: "/:path*",
