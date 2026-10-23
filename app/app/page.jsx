@@ -58,6 +58,17 @@ export default function HostApp() {
   }, [openId, view, refresh]);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2800); };
+  /* History is no longer carried by the poll, so fetch it when the Ledger is
+     opened — and on every reopen, so a receipt from ending an XID appears. */
+  useEffect(() => {
+    if (view !== "ledger" || !state) return;
+    let alive = true;
+    db.history()
+      .then((rs) => { if (alive) setState((s) => s && ({ ...s, receipts: rs })); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [view, !!state]);
+
   const go = (v, id = null) => {
     setView(v); setOpenId(id);
     if (id) setState((s) => s && ({ ...s, xids: s.xids.map((x) => (x.id === id ? { ...x, unread: 0 } : x)) }));

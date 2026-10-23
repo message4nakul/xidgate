@@ -772,10 +772,12 @@ export const db = {
       return m;
     }
 
-    const [{ data: xids }, { data: receipts }] = await Promise.all([
-      sb.from("xids").select("*").order("created_at", { ascending: false }),
-      sb.from("receipts").select("*").order("ended_at", { ascending: false }).limit(200),
-    ]);
+    /* History is deliberately NOT fetched here. This runs every four seconds
+       while the dashboard is open, and receipts were 82% of the payload — 26 KB
+       of a 32 KB poll — despite being the one thing that cannot change between
+       polls. db.history() loads them when the Ledger is actually opened. */
+    const { data: xids } = await sb
+      .from("xids").select("*").order("created_at", { ascending: false });
 
     const ids = (xids ?? []).map((x) => x.id);
     let conns = [], msgs = [];
@@ -816,12 +818,22 @@ export const db = {
     return {
       kept,
       xids: out,
-      receipts: (receipts ?? []).map((r) => ({
-        id: r.id, code: r.code, label: r.label, reason: r.reason,
-        connections: r.connections, destroyed: r.destroyed,
-        issued: new Date(r.issued_at).getTime(), ended: new Date(r.ended_at).getTime(),
-      })),
+      receipts: [],   // filled by history(), not by polling
     };
+  },
+
+  /* Loaded once when the Ledger opens, and again each time it is reopened, so a
+     receipt written by ending an XID shows up without the poll carrying history
+     around all day. */
+  async history() {
+    if (!LIVE) return memory().receipts;
+    const { data } = await sb
+      .from("receipts").select("*").order("ended_at", { ascending: false }).limit(200);
+    return (data ?? []).map((r) => ({
+      id: r.id, code: r.code, label: r.label, reason: r.reason,
+      connections: r.connections, destroyed: r.destroyed,
+      issued: new Date(r.issued_at).getTime(), ended: new Date(r.ended_at).getTime(),
+    }));
   },
 
   async issue(cfg, presetId) {
