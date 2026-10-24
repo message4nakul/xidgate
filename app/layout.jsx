@@ -1,4 +1,5 @@
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://xidgate.com"),
@@ -23,7 +24,14 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Page views only, and the script and its beacons are both served from
+            this origin — so the existing script-src 'self' and connect-src 'self'
+            already allow it and the CSP needs no loosening. No cookies, and
+            nothing here can see a message, a code or a token. */}
+        <Analytics />
+      </body>
     </html>
   );
 }
